@@ -466,8 +466,9 @@ async function fetchWxWithCache(lat, lon) {
   try {
     const r = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,
-      { signal: AbortSignal.timeout(9000) }
+      { signal: AbortSignal.timeout(7000) }
     );
+    if(!r.ok) throw new Error('wx fetch failed');
     const x = await r.json();
     return { data: { current: x.current, hourly: x.hourly }, fromCache: false };
   } catch(e) {
@@ -481,8 +482,9 @@ async function fetchFcWithCache(lat, lon) {
   try {
     const r = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,surface_pressure_mean,sunrise,sunset&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode&forecast_days=7&timezone=Europe%2FLondon`,
-      { signal: AbortSignal.timeout(9000) }
+      { signal: AbortSignal.timeout(7000) }
     );
+    if(!r.ok) throw new Error('fc fetch failed');
     return { data: await r.json(), fromCache: false };
   } catch(e) {
     const cached = readConditionsCache(lat, lon);
@@ -995,8 +997,24 @@ function sepaLink(st){if(!st)return'';return `<a href="https://waterlevels.sepa.
 function lvGuide(){return`<div class="lbl">Level interpretation guide</div><div class="cf"><div class="tr2"><span class="tk">Below 10% of normal range</span><span class="tv" style="color:var(--ambl)">Very low</span></div><div class="tr2"><span class="tk">10–50% of normal range</span><span class="tv" style="color:var(--al)">Ideal — fish freely</span></div><div class="tr2"><span class="tk">50–100% of normal range</span><span class="tv" style="color:var(--ambl)">High — wade carefully</span></div><div class="tr2"><span class="tk">Above normal maximum</span><span class="tv" style="color:var(--redl)">Flood — no go</span></div></div>`;}
 
 /* CORS PROXY & APIs */
-const PROXIES=[u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`];
-async function proxyFetch(url){for(const px of PROXIES){try{const r=await fetch(px(url),{signal:AbortSignal.timeout(9000)});if(r.ok){const t=await r.text();return JSON.parse(t);}}catch(e){}}return null;}
+/* Three proxies tried in parallel — first to respond wins, 5s hard timeout each */
+const PROXIES=[
+  u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
+  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://thingproxy.freeboard.io/fetch/${u}`,
+];
+async function proxyFetch(url){
+  // Race all proxies — return first successful response within 6s
+  const attempts=PROXIES.map(px=>
+    fetch(px(url),{signal:AbortSignal.timeout(6000)})
+      .then(r=>{if(!r.ok)throw new Error('not ok');return r.text();})
+      .then(t=>JSON.parse(t))
+  );
+  // Use allSettled so one failure doesn't cancel the others, then take first fulfilled
+  const results=await Promise.allSettled(attempts);
+  const winner=results.find(r=>r.status==='fulfilled');
+  return winner?winner.value:null;
+}
 async function fetchSEPA(key){const st=SEPA[key];if(!st||!st.tsId)return null;const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${st.tsId}&period=P3D&returnfields=Timestamp,Value&format=json`;try{const data=await proxyFetch(url);if(data&&data[0]&&data[0].data&&data[0].data.length>0){const raw=data[0].data.map(x=>({t:x[0],v:parseFloat(x[1])})).filter(x=>!isNaN(x.v));const vals=raw.map(x=>x.v),latest=vals[vals.length-1],prev=vals.length>4?vals[vals.length-5]:vals[0],trend=latest>prev+0.02?'rising':latest<prev-0.02?'falling':'stable';const lastTs=raw[raw.length-1].t;return{level:latest,trend,history:vals.slice(-48),timestamps:raw.slice(-48).map(x=>x.t),gauge:st.gauge,stId:st.stId,nMax:st.nMax,lastUpdated:lastTs};}}catch(e){}return null;}
 /* fetchSEPAById — now delegates to cache-aware version; cacheLat/cacheLon optionally set by callers */
 async function fetchSEPAById(tsId,stId,label,nMax,cacheLat,cacheLon){
@@ -1006,7 +1024,7 @@ async function fetchSEPAById(tsId,stId,label,nMax,cacheLat,cacheLon){
 /* fetchWx / fetchFc — thin wrappers; callers that need fromCache info call the *WithCache variants directly */
 async function fetchWx(lat,lon){const r=await fetchWxWithCache(lat,lon);return r.data;}
 async function fetchFc(lat,lon){const r=await fetchFcWithCache(lat,lon);return r.data;}
-async function revGeo(lat,lon){try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,{signal:AbortSignal.timeout(6000)});const x=await r.json();return x.address?.village||x.address?.town||x.address?.city||x.address?.county||'Your location';}catch(e){return'Your location';}}
+async function revGeo(lat,lon){try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,{signal:AbortSignal.timeout(5000)});const x=await r.json();return x.address?.village||x.address?.town||x.address?.city||x.address?.county||'Your location';}catch(e){return'Your location';}}
 
 /* VIEW SWITCHING */
 function showView(v){document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));const vEl=document.getElementById('view-'+v);if(!vEl)return;vEl.classList.add('active');document.querySelectorAll('.tb').forEach(e=>e.classList.remove('on'));const t=document.getElementById('tab-'+v);if(t)t.classList.add('on');if(v==='rivers')renderRivers();if(v==='beats'){renderBeats();openMyMap();}if(v==='log')renderLog();if(v==='home')renderHome();}
@@ -1204,6 +1222,14 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   curHTab='now';switchHTab('now');
   const st={stId:g.stId,gauge:g.label,nMax:g.nMax,glat,glon};
 
+  // Hard 12s timeout on the whole load — never spin forever
+  const loadTimer=setTimeout(()=>{
+    if(document.getElementById('here-now')?.innerHTML?.includes('spinner')){
+      document.getElementById('here-now').innerHTML=`<div class="lw"><div class="err" style="margin:0 13px">Unable to load data. Check your connection and try again.<br><br><button onclick="loadConditionsForGauge(window._lastGauge?.g,window._lastGauge?.lat,window._lastGauge?.lon,window._lastGauge?.pn)" style="margin-top:8px;padding:9px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:var(--fb);font-size:13px;cursor:pointer">Retry</button></div></div>`;
+    }
+  },12000);
+  window._lastGauge={g,lat:userLat,lon:userLon,pn};
+
   // Use cache-aware fetchers so we get fromCache/ts metadata
   const [wxRes,fcRes]=await Promise.all([fetchWxWithCache(userLat,userLon),fetchFcWithCache(userLat,userLon)]);
   const wx=wxRes.data, fc=fcRes.data;
@@ -1213,6 +1239,8 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
     const rvRes=await fetchSEPAByIdWithCache(g.tsId,g.stId,g.label,g.nMax,userLat,userLon);
     rv=rvRes.data; rvFromCache=rvRes.fromCache; rvTs=rvRes.ts;
   }
+
+  clearTimeout(loadTimer);
 
   // Determine if any data came from cache
   const anyFromCache = wxRes.fromCache || fcRes.fromCache || rvFromCache;
