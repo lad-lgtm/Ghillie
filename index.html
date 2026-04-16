@@ -1005,12 +1005,12 @@ const PROXIES=[
 async function proxyFetch(url){
   // First: try direct (works if server sends CORS headers)
   try{
-    const r=await fetch(url,{signal:AbortSignal.timeout(5000),mode:'cors'});
+    const r=await fetch(url,{signal:AbortSignal.timeout(4000),mode:'cors'});
     if(r.ok){const t=await r.text();return JSON.parse(t);}
   }catch(e){}
-  // Then race all proxies — first response wins
+  // Then race all proxies — first response wins, 4s each
   const attempts=PROXIES.map(px=>
-    fetch(px(url),{signal:AbortSignal.timeout(6000)})
+    fetch(px(url),{signal:AbortSignal.timeout(4000)})
       .then(r=>{if(!r.ok)throw new Error('not ok');return r.text();})
       .then(t=>JSON.parse(t))
   );
@@ -1224,54 +1224,67 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   document.getElementById('here-forecast').innerHTML='';document.getElementById('here-river').innerHTML='';
   curHTab='now';switchHTab('now');
   const st={stId:g.stId,gauge:g.label,nMax:g.nMax,glat,glon};
-
-  // Hard 12s timeout on the whole load — never spin forever
-  const loadTimer=setTimeout(()=>{
-    if(document.getElementById('here-now')?.innerHTML?.includes('spinner')){
-      document.getElementById('here-now').innerHTML=`<div class="lw"><div class="err" style="margin:0 13px">Unable to load data. Check your connection and try again.<br><br><button onclick="loadConditionsForGauge(window._lastGauge?.g,window._lastGauge?.lat,window._lastGauge?.lon,window._lastGauge?.pn)" style="margin-top:8px;padding:9px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:var(--fb);font-size:13px;cursor:pointer">Retry</button></div></div>`;
-    }
-  },12000);
   window._lastGauge={g,lat:userLat,lon:userLon,pn};
 
-  // Use cache-aware fetchers so we get fromCache/ts metadata
+  // ── Step 1: Load weather first — render page immediately when ready ──
   const [wxRes,fcRes]=await Promise.all([fetchWxWithCache(userLat,userLon),fetchFcWithCache(userLat,userLon)]);
   const wx=wxRes.data, fc=fcRes.data;
 
-  let rv=null, rvFromCache=false, rvTs=null;
-  if(g.tsId){
-    const rvRes=await fetchSEPAByIdWithCache(g.tsId,g.stId,g.label,g.nMax,userLat,userLon);
-    rv=rvRes.data; rvFromCache=rvRes.fromCache; rvTs=rvRes.ts;
+  if(!wx && !fc){
+    // Truly no data at all
+    document.getElementById('here-now').innerHTML=`<div class="lw"><div class="err" style="margin:0 13px">Unable to load weather data. Check your connection.<br><br><button onclick="loadConditionsForGauge(window._lastGauge.g,window._lastGauge.lat,window._lastGauge.lon,window._lastGauge.pn)" style="margin-top:8px;padding:9px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-family:var(--fb);font-size:13px;cursor:pointer">Retry</button></div></div>`;
+    updateOfflineBanner(true, null);
+    return;
   }
 
-  clearTimeout(loadTimer);
-
-  // Only show offline banner if weather fetches failed (SEPA failing alone is normal — many gauges have no tsId)
-  const wxFailed = wxRes.fromCache;
-  const fcFailed = fcRes.fromCache;
-  const rvActuallyCached = rvFromCache && rvTs !== null; // cached rv data was returned
-  const oldestTs = Math.min(...[wxRes.ts, fcRes.ts, rvTs].filter(Boolean));
-
-  if (!wxFailed && !fcFailed) {
-    // Weather came from network — write cache and hide banner
-    writeConditionsCache(userLat, userLon, wx, fc, rv || null);
+  if(wxRes.fromCache && fcRes.fromCache){
+    updateOfflineBanner(true, isFinite(Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean))) ? Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean)) : null);
+  } else {
     updateOfflineBanner(false);
-  } else if (wxFailed && fcFailed) {
-    // Both weather fetches failed — genuinely offline or network issue
-    updateOfflineBanner(true, isFinite(oldestTs) ? oldestTs : null);
   }
-  // If only SEPA failed but weather loaded fine — no banner, just show weather without river data
 
-  // Best matching river object for species/catchment info
+  // Render immediately with no river data so page is never blank
   const river=RIVERS.find(r=>r.name===g.river)||
     RIVERS.find(r=>g.river.includes(r.name.replace('River ','').replace('Water of ','')))||
     {name:g.river,lat:glat,lon:glon,sepa:g.sepaKey,cat:g.catKey,catchment:g.river,species:'—',icon:'🐟',noData:!g.tsId};
   const p6h=calc6hPressureTrend(wx?.hourly);
-  hereData={lat:userLat,lon:userLon,river,wx,rv,fc,st};
-  const cond=scoreNow(wx?.current,rv,g.nMax,p6h);
   const alerts=getAlerts(fc);
-  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,anyFromCache?oldestTs:null);
+  hereData={lat:userLat,lon:userLon,river,wx,rv:null,fc,st};
+  const condNoRiver=scoreNow(wx?.current,null,g.nMax,p6h);
+  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,null,condNoRiver,st,userLat,userLon,alerts,wx?.hourly,fc,null);
   renderForecast(fc,alerts,g.lag||18);
-  renderRiverTab(rv,river,st);
+  renderRiverTab(null,river,st);
+
+  // ── Step 2: Load SEPA river data in background — update when ready ──
+  if(g.tsId){
+    // Show a subtle "loading river data..." note in the river level card
+    const rvCard=document.querySelector('.lvbar-bg');
+    if(rvCard)rvCard.closest('.card')?.querySelector('.lbl+.card')?.setAttribute('data-loading-rv','1');
+
+    const rvRes=await fetchSEPAByIdWithCache(g.tsId,g.stId,g.label,g.nMax,userLat,userLon);
+    const rv=rvRes.data;
+
+    if(rv){
+      // Got river data — re-render now tab with it and write cache
+      hereData.rv=rv;
+      const condWithRiver=scoreNow(wx?.current,rv,g.nMax,p6h);
+      const cacheTs=(wxRes.fromCache||fcRes.fromCache)?Math.min(...[wxRes.ts,fcRes.ts,rvRes.ts].filter(Boolean)):null;
+      document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,condWithRiver,st,userLat,userLon,alerts,wx?.hourly,fc,isFinite(cacheTs)?cacheTs:null);
+      renderRiverTab(rv,river,st);
+      if(!wxRes.fromCache && !fcRes.fromCache){
+        writeConditionsCache(userLat,userLon,wx,fc,rv);
+      }
+    } else {
+      // SEPA unavailable — write cache with just weather
+      if(!wxRes.fromCache && !fcRes.fromCache){
+        writeConditionsCache(userLat,userLon,wx,fc,null);
+      }
+    }
+  } else {
+    if(!wxRes.fromCache && !fcRes.fromCache){
+      writeConditionsCache(userLat,userLon,wx,fc,null);
+    }
+  }
 }
 
 /* Called from the nearby picker when user taps a specific gauge */
