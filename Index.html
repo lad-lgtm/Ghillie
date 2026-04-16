@@ -995,20 +995,25 @@ function sepaLink(st){if(!st)return'';return `<a href="https://waterlevels.sepa.
 function lvGuide(){return`<div class="lbl">Level interpretation guide</div><div class="cf"><div class="tr2"><span class="tk">Below 10% of normal range</span><span class="tv" style="color:var(--ambl)">Very low</span></div><div class="tr2"><span class="tk">10–50% of normal range</span><span class="tv" style="color:var(--al)">Ideal — fish freely</span></div><div class="tr2"><span class="tk">50–100% of normal range</span><span class="tv" style="color:var(--ambl)">High — wade carefully</span></div><div class="tr2"><span class="tk">Above normal maximum</span><span class="tv" style="color:var(--redl)">Flood — no go</span></div></div>`;}
 
 /* CORS PROXY & APIs */
-/* Three proxies tried in parallel — first to respond wins, 5s hard timeout each */
+/* Try direct fetch first (SEPA may allow it), then race proxies */
 const PROXIES=[
   u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
   u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u=>`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
   u=>`https://thingproxy.freeboard.io/fetch/${u}`,
 ];
 async function proxyFetch(url){
-  // Race all proxies — return first successful response within 6s
+  // First: try direct (works if server sends CORS headers)
+  try{
+    const r=await fetch(url,{signal:AbortSignal.timeout(5000),mode:'cors'});
+    if(r.ok){const t=await r.text();return JSON.parse(t);}
+  }catch(e){}
+  // Then race all proxies — first response wins
   const attempts=PROXIES.map(px=>
     fetch(px(url),{signal:AbortSignal.timeout(6000)})
       .then(r=>{if(!r.ok)throw new Error('not ok');return r.text();})
       .then(t=>JSON.parse(t))
   );
-  // Use allSettled so one failure doesn't cancel the others, then take first fulfilled
   const results=await Promise.allSettled(attempts);
   const winner=results.find(r=>r.status==='fulfilled');
   return winner?winner.value:null;
@@ -1240,17 +1245,21 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
 
   clearTimeout(loadTimer);
 
-  // Determine if any data came from cache
-  const anyFromCache = wxRes.fromCache || fcRes.fromCache || rvFromCache;
-  const oldestTs = Math.min(...[wxRes.ts,fcRes.ts,rvTs].filter(Boolean));
+  // Only show offline banner if weather fetches failed (SEPA failing alone is normal — many gauges have no tsId)
+  const wxFailed = wxRes.fromCache;
+  const fcFailed = fcRes.fromCache;
+  const rvActuallyCached = rvFromCache && rvTs !== null; // cached rv data was returned
+  const oldestTs = Math.min(...[wxRes.ts, fcRes.ts, rvTs].filter(Boolean));
 
-  if(!anyFromCache && wx && fc){
-    // Fresh data — write cache and hide banner
-    writeConditionsCache(userLat, userLon, wx, fc, rv);
+  if (!wxFailed && !fcFailed) {
+    // Weather came from network — write cache and hide banner
+    writeConditionsCache(userLat, userLon, wx, fc, rv || null);
     updateOfflineBanner(false);
-  } else if(anyFromCache){
+  } else if (wxFailed && fcFailed) {
+    // Both weather fetches failed — genuinely offline or network issue
     updateOfflineBanner(true, isFinite(oldestTs) ? oldestTs : null);
   }
+  // If only SEPA failed but weather loaded fine — no banner, just show weather without river data
 
   // Best matching river object for species/catchment info
   const river=RIVERS.find(r=>r.name===g.river)||
@@ -1300,19 +1309,19 @@ async function loadConditionsForRiver(idx,userLat,userLon,pn){
   const [wxRes,fcRes]=await Promise.all([fetchWxWithCache(userLat,userLon),fetchFcWithCache(userLat,userLon)]);
   const wx=wxRes.data, fc=fcRes.data;
   const rv=null;
-  const anyFromCache=wxRes.fromCache||fcRes.fromCache;
   const oldestTs=Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean));
-  if(!anyFromCache && wx && fc){
+  if(!wxRes.fromCache && !fcRes.fromCache){
     writeConditionsCache(userLat,userLon,wx,fc,null);
     updateOfflineBanner(false);
-  } else if(anyFromCache){
+  } else if(wxRes.fromCache && fcRes.fromCache){
     updateOfflineBanner(true, isFinite(oldestTs)?oldestTs:null);
   }
+  const anyFromCache=wxRes.fromCache&&fcRes.fromCache;
   const p6h=calc6hPressureTrend(wx?.hourly);
   hereData={lat:userLat,lon:userLon,river,wx,rv,fc,st};
   const cond=scoreNow(wx?.current,rv,st?.nMax,p6h);
   const alerts=getAlerts(fc);
-  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,anyFromCache?oldestTs:null);
+  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,anyFromCache&&isFinite(oldestTs)?oldestTs:null);
   renderForecast(fc,alerts,st?.lag||18);
   renderRiverTab(rv,river,st);
 }
