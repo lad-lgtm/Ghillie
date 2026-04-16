@@ -15,15 +15,15 @@
 .mpill.on{background:rgba(74,158,106,.15);border-color:var(--accent);color:var(--al)}
 .pcat-btn{font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;font-family:var(--fb)}
 .pcat-btn.on{background:rgba(74,158,106,.15);border-color:var(--accent);color:var(--al)}
-.leaflet-popup-content-wrapper{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.5);color:var(--text)}
-.leaflet-popup-tip{background:var(--bg2)}
+.leaflet-popup-content-wrapper{background:#fff;border:1px solid rgba(0,0,0,.12);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.15);color:#1a1a1a}
+.leaflet-popup-tip{background:#fff}
 .leaflet-popup-content{margin:10px 13px;font-family:"DM Sans",system-ui,sans-serif}
-.lf-pop-title{font-size:13px;font-weight:500;color:var(--text)}
-.lf-pop-cat{font-size:10px;color:var(--text3);margin-top:2px}
-.lf-pop-notes{font-size:11px;color:var(--text2);margin-top:5px;line-height:1.5}
-.lf-pop-edit{display:inline-block;margin-top:8px;font-size:11px;font-weight:500;color:var(--al);cursor:pointer;padding:4px 10px;background:rgba(74,158,106,.12);border-radius:6px;border:1px solid rgba(74,158,106,.25)}
-.leaflet-control-zoom a{background:var(--bg3)!important;color:var(--text)!important;border-color:var(--border2)!important}
-.leaflet-bar{border:1px solid var(--border2)!important}
+.lf-pop-title{font-size:13px;font-weight:500;color:#1a1a1a}
+.lf-pop-cat{font-size:10px;color:#666;margin-top:2px}
+.lf-pop-notes{font-size:11px;color:#444;margin-top:5px;line-height:1.5}
+.lf-pop-edit{display:inline-block;margin-top:8px;font-size:11px;font-weight:500;color:#4a9e6a;cursor:pointer;padding:4px 10px;background:rgba(74,158,106,.1);border-radius:6px;border:1px solid rgba(74,158,106,.3)}
+.leaflet-control-zoom a{background:#fff!important;color:#333!important;border-color:rgba(0,0,0,.15)!important}
+.leaflet-bar{border:1px solid rgba(0,0,0,.15)!important}
 </style>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap');
@@ -301,6 +301,8 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
   </div>
   <div id="map-container" style="flex:1;position:relative;min-height:0">
     <div id="leaflet-map" style="width:100%;height:100%"></div>
+    <!-- current location button -->
+    <button onclick="mapGoToMyLocation()" title="My location" style="position:absolute;bottom:16px;right:12px;z-index:1000;width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.15);box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center">📍</button>
     <!-- empty state overlay -->
     <div id="map-empty" style="display:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;background:rgba(14,26,18,.7)">
       <div style="font-size:38px">📍</div>
@@ -533,6 +535,7 @@ const SEPA={
   clyde:{stId:'133074',tsId:'52849010',gauge:'Clyde at Daldowie',nMax:3.567,glat:55.8278,glon:-4.1056,lag:30},
   leith:{stId:'14868',tsId:'54261010',gauge:'Water of Leith at Murrayfield',nMax:1.764,glat:55.9361,glon:-3.2583,lag:6},
   earn:{stId:'14970',tsId:'55685010',gauge:'Earn at Forteviot',nMax:2.793,glat:56.3208,glon:-3.4556,lag:18},
+  annan:{stId:'133143',tsId:null,gauge:'Annan at Woodfoot',nMax:2.5,glat:55.1528,glon:-3.2639,lag:10},
 };
 const CATCHMENTS={
   tay:[
@@ -570,6 +573,10 @@ const CATCHMENTS={
   earn:[
     {label:'Earn at Forteviot', stId:'14970', tsId:'55685010',nMax:2.793,glat:56.3208,glon:-3.4556},
   ],
+  annan:[
+    {label:'Annan at Woodfoot',   stId:'133143',tsId:null,nMax:2.5,glat:55.1528,glon:-3.2639},
+    {label:'Annan at Brydekirk',  stId:'133144',tsId:null,nMax:3.0,glat:55.0278,glon:-3.3417},
+  ],
 };
 
 /* ═══ ALL_GAUGES — flat searchable list of every known SEPA station ═══
@@ -589,6 +596,7 @@ const ALL_GAUGES = (()=>{
     {key:'clyde',    river:'River Clyde'},
     {key:'leith',    river:'Water of Leith'},
     {key:'earn',     river:'River Earn'},
+    {key:'annan',    river:'River Annan'},
   ];
   sepaEntries.forEach(e=>{
     const st=SEPA[e.key];
@@ -605,7 +613,7 @@ const ALL_GAUGES = (()=>{
   });
   // Additional standalone gauges not in main SEPA/CATCHMENTS
   const extra = [
-    {label:'Annan at Woodfoot',        river:'River Annan',   stId:'133143',tsId:null,nMax:2.5,glat:55.1528,glon:-3.2639,sepaKey:'tweed',catKey:null},
+    {label:'Annan at Woodfoot',        river:'River Annan',   stId:'133143',tsId:null,nMax:2.5,glat:55.1528,glon:-3.2639,sepaKey:'annan',catKey:'annan'},
     {label:'Nith at Friars Carse',     river:'River Nith',    stId:'133156',tsId:null,nMax:2.2,glat:55.1222,glon:-3.7361,sepaKey:'nith',catKey:null},
     {label:'Findhorn at Forres',       river:'River Findhorn',stId:'234221',tsId:null,nMax:2.5,glat:57.6083,glon:-3.6222,sepaKey:'findhorn',catKey:null},
     {label:'Spey at Grantown',         river:'River Spey',    stId:'234170',tsId:null,nMax:2.8,glat:57.3278,glon:-3.5944,sepaKey:'spey',catKey:'spey'},
@@ -675,7 +683,7 @@ const RIVERS=[
   {name:'River Bladnoch',lat:54.844,lon:-4.422,sepa:'nith',cat:null,catchment:'Bladnoch',species:'Salmon, Sea trout',icon:'🐟'},
   {name:'River Ken',lat:55.023,lon:-4.048,sepa:'nith',cat:null,catchment:'Ken-Dee',species:'Salmon, Brown trout',icon:'🐟'},
   {name:'River Dee (Galloway)',lat:54.863,lon:-4.062,sepa:'nith',cat:null,catchment:'Galloway Dee',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Annan',lat:55.008,lon:-3.258,sepa:'tweed',cat:'tweed',catchment:'Annan',species:'Salmon, Sea trout',icon:'🐟'},
+  {name:'River Annan',lat:55.008,lon:-3.258,sepa:'annan',cat:'annan',catchment:'Annan',species:'Salmon, Sea trout',icon:'🐟'},
   {name:'Water of Luce',lat:54.875,lon:-4.830,sepa:'nith',cat:null,catchment:'Luce',species:'Sea trout, Brown trout',icon:'🐟'},
   {name:'River Lossie',lat:57.711,lon:-3.314,sepa:'findhorn',cat:null,catchment:'Lossie',species:'Salmon, Brown trout',icon:'🐟'},
   {name:'River Nairn',lat:57.584,lon:-3.875,sepa:'findhorn',cat:null,catchment:'Nairn',species:'Salmon, Brown trout',icon:'🐟'},
@@ -792,26 +800,36 @@ function lvStat(lv,nMax,trend){
   if(lv===null||lv===undefined)return{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
   const pct=lv/nm;
   const barPct=Math.min(99,Math.round(pct*90));
-  // >100% — danger to life
+
+  // Absolute wading depth takes priority for safety notes
+  // ~50-60cm is knee-deep on most Scottish rivers — the practical wading limit
+  let wadeNote='';
+  if(lv>0.9)       wadeNote='⚠️ Danger to life. Do not enter the water.';
+  else if(lv>0.6)  wadeNote='Wading dangerous — stay on the bank.';
+  else if(lv>0.5)  wadeNote='Careful wading only — take a wading staff.';
+  else if(lv>0.3)  wadeNote='Good wading conditions.';
+  else             wadeNote='Very shallow — fish are wary in clear water.';
+
+  // >100% — danger to life (also catches absolute danger)
   if(pct>1.0)return{text:'Danger — do not fish',cls:'bn',pct:99,col:'var(--red)',wade:'⚠️ Danger to life. Check with local ghillies.'};
-  // 80–100% — flood, river running dirty
+  // 80–100% — flood
   if(pct>0.8)return{text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',wade:'River likely running dirty. Check with local ghillies.'};
-  // 60–80% — too high regardless of trend
-  if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',wade:'Unfishable. Wait for the river to fall.'};
+  // 60–80% — too high
+  if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',wade:wadeNote};
   // 35–60% — depends on trend
   if(pct>0.35){
-    if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',wade:'River rising fast. Fish unsettled — avoid.'};
-    if(trend==='falling')return{text:'Falling — conditions improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:'Worth fishing. Improving as level drops.'};
-    return{text:'Fishable — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:'Careful approach. River on the high side.'};
+    if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',wade:wadeNote};
+    if(trend==='falling')return{text:'Falling — conditions improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:wadeNote};
+    return{text:'Fishable — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:wadeNote};
   }
-  // 10–35% — ideal band, trend matters
+  // 10–35% — ideal band
   if(pct>0.10){
-    if(trend==='rising')return{text:'Rising — conditions changing',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',wade:'Fish are unsettled as level rises.'};
-    if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:'Perfect wading. Fish are active.'};
-    return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:'Prime wading conditions.'};
+    if(trend==='rising')return{text:'Rising — conditions changing',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',wade:wadeNote};
+    if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:wadeNote};
+    return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:wadeNote};
   }
   // <10% — very low
-  return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',wade:'Fish cautious in clear water. Small fly, long leader.'};
+  return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',wade:wadeNote};
 }function tClass(t){return t==='falling'?'t-d':t==='rising'?'t-u':'t-s';}
 function tArr(t){return t==='falling'?'▼':t==='rising'?'▲':'—';}
 function scoreNow(w,r,nMax,pressureTrend6h){
@@ -1754,7 +1772,7 @@ function initMap(){
   const mapEl=document.getElementById('leaflet-map');
   if(!mapEl||mapEl.offsetHeight===0)return;
   _leafletMap=L.map('leaflet-map',{center:[56.8,-4.0],zoom:7,zoomControl:true});
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
     attribution:'© OpenStreetMap © CARTO',maxZoom:19,subdomains:'abcd'
   }).addTo(_leafletMap);
   _leafletMap.on('click',e=>{
@@ -1838,6 +1856,19 @@ function selectPinCat(cat,btn){
 function updatePlacingMarker(lat,lon){
   if(_placingMarker){_leafletMap.removeLayer(_placingMarker);_placingMarker=null;}
   if(lat&&lon)_placingMarker=L.marker([lat,lon],{icon:pinIcon(_pendingPin?.cat||'note'),opacity:.7}).addTo(_leafletMap);
+}
+
+async function mapGoToMyLocation(){
+  if(!_leafletMap)return;
+  try{
+    const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,enableHighAccuracy:true}));
+    const lat=pos.coords.latitude,lon=pos.coords.longitude;
+    _leafletMap.setView([lat,lon],14);
+    // Show a temporary pulse marker
+    if(window._myLocMarker)_leafletMap.removeLayer(window._myLocMarker);
+    window._myLocMarker=L.circleMarker([lat,lon],{radius:10,color:'#4a9e6a',fillColor:'#4a9e6a',fillOpacity:0.4,weight:3}).addTo(_leafletMap);
+    window._myLocMarker.bindPopup('📍 You are here').openPopup();
+  }catch(e){toast('Could not get location');}
 }
 
 async function pinUseGPS(){
