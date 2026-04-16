@@ -7,6 +7,23 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ghillie">
 <title>Ghillie — Scotland Fishing</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* MAP EXTRAS */
+.mpill{font-size:11px;font-weight:500;padding:5px 11px;border-radius:20px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;white-space:nowrap;font-family:var(--fb);flex-shrink:0}
+.mpill.on{background:rgba(74,158,106,.15);border-color:var(--accent);color:var(--al)}
+.pcat-btn{font-size:12px;padding:6px 11px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);cursor:pointer;font-family:var(--fb)}
+.pcat-btn.on{background:rgba(74,158,106,.15);border-color:var(--accent);color:var(--al)}
+.leaflet-popup-content-wrapper{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.5);color:var(--text)}
+.leaflet-popup-tip{background:var(--bg2)}
+.leaflet-popup-content{margin:10px 13px;font-family:"DM Sans",system-ui,sans-serif}
+.lf-pop-title{font-size:13px;font-weight:500;color:var(--text)}
+.lf-pop-cat{font-size:10px;color:var(--text3);margin-top:2px}
+.lf-pop-notes{font-size:11px;color:var(--text2);margin-top:5px;line-height:1.5}
+.lf-pop-edit{display:inline-block;margin-top:8px;font-size:11px;font-weight:500;color:var(--al);cursor:pointer;padding:4px 10px;background:rgba(74,158,106,.12);border-radius:6px;border:1px solid rgba(74,158,106,.25)}
+.leaflet-control-zoom a{background:var(--bg3)!important;color:var(--text)!important;border-color:var(--border2)!important}
+.leaflet-bar{border:1px solid var(--border2)!important}
+</style>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600&family=DM+Sans:wght@300;400;500&display=swap');
 :root{
@@ -145,11 +162,21 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 .spn{font-size:14px;font-weight:500;color:var(--text);font-family:var(--fd)}.sps{font-size:11px;color:var(--text3);margin-top:2px}
 .ia{background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:6px 11px;font-size:11px;color:var(--text2);cursor:pointer;font-family:var(--fb);transition:background .15s;white-space:nowrap}
 .ia:hover{background:var(--bg3)}.ia.grn{background:rgba(74,158,106,.12);border-color:rgba(74,158,106,.3);color:var(--al)}
+/* OFFLINE */
+.offline-bar{display:none;background:rgba(200,146,42,.12);border-bottom:1px solid rgba(200,146,42,.3);padding:5px 14px;font-size:11px;color:var(--ambl);flex-shrink:0;align-items:center;gap:6px;justify-content:space-between}
+.offline-bar.show{display:flex}
+.offline-bar.stale{background:rgba(201,64,64,.1);border-bottom-color:rgba(201,64,64,.3);color:var(--redl)}
+.cache-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 7px;border-radius:10px;background:rgba(200,146,42,.15);border:1px solid rgba(200,146,42,.25);color:var(--ambl);margin-left:6px;flex-shrink:0}
+.cache-badge.stale{background:rgba(201,64,64,.1);border-color:rgba(201,64,64,.25);color:var(--redl)}
 </style>
 </head>
 <body>
 <div class="app" id="app">
 <div class="sb"><span id="clock">9:41</span><span>GPS</span></div>
+<div class="offline-bar" id="offline-bar">
+  <span id="offline-msg">📵 Offline — showing cached data</span>
+  <span id="offline-age" style="font-size:10px;opacity:.8"></span>
+</div>
 
 <!-- HOME -->
 <div id="view-home" class="view active">
@@ -254,10 +281,73 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
   <div class="scroll" id="nc-content"><div class="lw"><div class="spinner"></div></div></div>
 </div>
 
-<!-- BEATS -->
+<!-- MY MAP -->
 <div id="view-beats" class="view">
-  <div class="topbar"><h1>Beats & resources</h1><p>Permits · access · species guide</p></div>
-  <div class="scroll" id="beats-scroll"></div>
+  <div class="topbar">
+    <div class="tr">
+      <div><h1>My Map</h1><p>Parking · access · pools · notes</p></div>
+      <button class="bbtn" style="background:var(--accent);border-color:var(--accent);color:#fff" onclick="startAddPin()">+ Add pin</button>
+    </div>
+  </div>
+  <!-- Category filter pills -->
+  <div style="display:flex;gap:6px;padding:8px 13px 0;flex-shrink:0;overflow-x:auto" id="map-filter-bar">
+    <button class="mpill on" data-cat="all" onclick="setMapFilter('all',this)">All</button>
+    <button class="mpill" data-cat="parking" onclick="setMapFilter('parking',this)">🅿️ Parking</button>
+    <button class="mpill" data-cat="access" onclick="setMapFilter('access',this)">🚶 Access</button>
+    <button class="mpill" data-cat="pool" onclick="setMapFilter('pool',this)">🎣 Pool</button>
+    <button class="mpill" data-cat="hazard" onclick="setMapFilter('hazard',this)">⚠️ Hazard</button>
+    <button class="mpill" data-cat="note" onclick="setMapFilter('note',this)">📝 Note</button>
+  </div>
+  <div id="map-container" style="flex:1;position:relative;min-height:0">
+    <div id="leaflet-map" style="width:100%;height:100%"></div>
+    <!-- empty state overlay -->
+    <div id="map-empty" style="display:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;background:rgba(14,26,18,.7)">
+      <div style="font-size:38px">📍</div>
+      <div style="font-size:14px;font-weight:500;color:var(--text)">No pins yet</div>
+      <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.5;padding:0 30px">Tap "+ Add pin" to mark parking spots, access points, favourite pools and hazards</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD / EDIT PIN MODAL -->
+<div class="modal-overlay" id="modal-pin" onclick="closePinModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-height:90vh">
+    <div class="mh"></div>
+    <div class="mt" id="pin-modal-title">Add pin</div>
+    <div style="display:flex;flex-direction:column;gap:11px">
+      <div class="fg">
+        <label class="fl">Category</label>
+        <div style="display:flex;gap:7px;flex-wrap:wrap" id="pin-cat-btns">
+          <button class="pcat-btn on" data-cat="parking" onclick="selectPinCat('parking',this)">🅿️ Parking</button>
+          <button class="pcat-btn" data-cat="access" onclick="selectPinCat('access',this)">🚶 Access</button>
+          <button class="pcat-btn" data-cat="pool" onclick="selectPinCat('pool',this)">🎣 Pool</button>
+          <button class="pcat-btn" data-cat="hazard" onclick="selectPinCat('hazard',this)">⚠️ Hazard</button>
+          <button class="pcat-btn" data-cat="note" onclick="selectPinCat('note',this)">📝 Note</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label class="fl">Name *</label>
+        <input class="fi" id="pin-name" placeholder="e.g. Lower car park, Heron Pool…">
+      </div>
+      <div class="fg">
+        <label class="fl">River / water</label>
+        <input class="fi" id="pin-river" placeholder="e.g. River Tay">
+      </div>
+      <div class="fg">
+        <label class="fl">Notes</label>
+        <textarea class="fta" id="pin-notes" placeholder="Directions, depth, hazards, anything useful…" style="min-height:70px"></textarea>
+      </div>
+      <div class="fg">
+        <label class="fl">Location</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div id="pin-loc-display" style="flex:1;font-size:12px;color:var(--text3);padding:9px 11px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px">Tap map to place, or use GPS</div>
+          <button onclick="pinUseGPS()" style="flex-shrink:0;padding:9px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:var(--fb);font-size:12px;cursor:pointer">📍 GPS</button>
+        </div>
+      </div>
+      <button class="bp" onclick="savePin()">Save pin</button>
+      <button class="bs" id="pin-delete-btn" style="display:none;color:var(--redl);border-color:rgba(201,64,64,.3)" onclick="deletePin()">Delete pin</button>
+    </div>
+  </div>
 </div>
 
 
@@ -267,7 +357,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
   <button class="tb" id="tab-here" onclick="showView('here')"><span class="tbi">◎</span>Here</button>
   <button class="tb" id="tab-rivers" onclick="showView('rivers')"><span class="tbi">≋</span>Rivers</button>
   <button class="tb" id="tab-log" onclick="showView('log')"><span class="tbi">📓</span>Log</button>
-  <button class="tb" id="tab-beats" onclick="showView('beats')"><span class="tbi">⚓</span>Beats</button>
+  <button class="tb" id="tab-beats" onclick="showView('beats')"><span class="tbi">📍</span>My Map</button>
 </div>
 
 <!-- MODALS -->
@@ -295,6 +385,142 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 </div>
 
 <script>
+/* ═══════════════════════════════════════════════
+   OFFLINE MODE
+   ─────────────────────────────────────────────
+   Strategy:
+   • On every successful wx/fc/sepa fetch, write to
+     localStorage with a timestamp (key = coords).
+   • On network failure, read from cache and show banner.
+   • Banner shows age of cached data; turns red if >6h old.
+   • Catches always log to localStorage (already works).
+   ═══════════════════════════════════════════════ */
+
+let _isOffline = !navigator.onLine;
+let _cacheTimestamp = null; // timestamp of currently displayed cached data
+
+const CACHE_WARN_MS  = 6  * 3600 * 1000; // 6h — amber
+const CACHE_STALE_MS = 24 * 3600 * 1000; // 24h — red
+
+function _cacheKey(lat, lon) {
+  return `g_cache_${parseFloat(lat).toFixed(2)}_${parseFloat(lon).toFixed(2)}`;
+}
+
+function writeConditionsCache(lat, lon, wx, fc, rv) {
+  try {
+    const key = _cacheKey(lat, lon);
+    const payload = { ts: Date.now(), wx, fc, rv };
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch(e) {}
+}
+
+function readConditionsCache(lat, lon) {
+  try {
+    const key = _cacheKey(lat, lon);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch(e) { return null; }
+}
+
+function fmtAge(ms) {
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(ms / 3600000);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs/24)}d ago`;
+}
+
+function updateOfflineBanner(show, cacheTs) {
+  const bar = document.getElementById('offline-bar');
+  const msg = document.getElementById('offline-msg');
+  const age = document.getElementById('offline-age');
+  if (!bar) return;
+
+  if (!show) { bar.classList.remove('show','stale'); return; }
+
+  bar.classList.add('show');
+  _cacheTimestamp = cacheTs;
+
+  if (cacheTs) {
+    const elapsed = Date.now() - cacheTs;
+    const isStale = elapsed > CACHE_WARN_MS;
+    const isVeryStale = elapsed > CACHE_STALE_MS;
+    bar.classList.toggle('stale', isVeryStale);
+    msg.textContent = isVeryStale
+      ? '⚠️ Offline — cached data is over 24h old'
+      : '📵 Offline — showing cached conditions';
+    age.textContent = `Saved ${fmtAge(elapsed)}`;
+  } else {
+    msg.textContent = '📵 Offline — no cached data for this location';
+    age.textContent = '';
+  }
+}
+
+/* Network event listeners */
+window.addEventListener('online',  () => { _isOffline = false; updateOfflineBanner(false); toast('Back online 🟢'); });
+window.addEventListener('offline', () => { _isOffline = true; updateOfflineBanner(true, _cacheTimestamp); });
+
+/* Patched fetch wrappers that transparently fall back to cache */
+async function fetchWxWithCache(lat, lon) {
+  try {
+    const r = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,
+      { signal: AbortSignal.timeout(9000) }
+    );
+    const x = await r.json();
+    return { data: { current: x.current, hourly: x.hourly }, fromCache: false };
+  } catch(e) {
+    const cached = readConditionsCache(lat, lon);
+    if (cached?.wx) return { data: cached.wx, fromCache: true, ts: cached.ts };
+    return { data: null, fromCache: true, ts: null };
+  }
+}
+
+async function fetchFcWithCache(lat, lon) {
+  try {
+    const r = await fetch(
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,surface_pressure_mean,sunrise,sunset&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode&forecast_days=7&timezone=Europe%2FLondon`,
+      { signal: AbortSignal.timeout(9000) }
+    );
+    return { data: await r.json(), fromCache: false };
+  } catch(e) {
+    const cached = readConditionsCache(lat, lon);
+    if (cached?.fc) return { data: cached.fc, fromCache: true, ts: cached.ts };
+    return { data: null, fromCache: true, ts: null };
+  }
+}
+
+async function fetchSEPAByIdWithCache(tsId, stId, label, nMax, cacheLat, cacheLon) {
+  const url = `https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${tsId}&period=P3D&returnfields=Timestamp,Value&format=json`;
+  try {
+    const data = await proxyFetch(url);
+    if (data && data[0] && data[0].data && data[0].data.length > 0) {
+      const raw = data[0].data.map(x => ({ t: x[0], v: parseFloat(x[1]) })).filter(x => !isNaN(x.v));
+      const vals = raw.map(x => x.v);
+      const latest = vals[vals.length-1];
+      const prev   = vals.length > 4 ? vals[vals.length-5] : vals[0];
+      const trend  = latest > prev + 0.02 ? 'rising' : latest < prev - 0.02 ? 'falling' : 'stable';
+      const lastTs = raw[raw.length-1].t;
+      return { data: { level: latest, trend, history: vals.slice(-48), timestamps: raw.slice(-48).map(x => x.t), gauge: label, stId, nMax, lastUpdated: lastTs }, fromCache: false };
+    }
+  } catch(e) {}
+  // fallback to cache
+  if (cacheLat && cacheLon) {
+    const cached = readConditionsCache(cacheLat, cacheLon);
+    if (cached?.rv) return { data: cached.rv, fromCache: true, ts: cached.ts };
+  }
+  return { data: null, fromCache: true, ts: null };
+}
+
+/* Cache-badge helper — appended to the "last updated" line when showing cached data */
+function cacheBadge(ts) {
+  if (!ts) return '';
+  const elapsed = Date.now() - ts;
+  const cls = elapsed > CACHE_WARN_MS ? 'stale' : '';
+  return `<span class="cache-badge ${cls}">📦 Cached · ${fmtAge(elapsed)}</span>`;
+}
+
 const SEPA={
   tay:{stId:'14936',tsId:'55189010',gauge:'Tay at Caputh',nMax:3.238,glat:56.5389,glon:-3.5139,lag:24},
   spey:{stId:'234254',tsId:'57775010',gauge:'Spey at Kincraig',nMax:2.119,glat:57.0822,glon:-3.9722,lag:18},
@@ -560,23 +786,57 @@ function pTrend6h(delta,abs){
   if(p<1000)return{text:'Low pressure — fish less active.',col:'#e06060'};
   return{text:'Stable pressure — fish behaviour predictable.',col:'#e8b84a'};
 }
-function lvStat(lv,nMax){const nm=nMax||3;if(lv===null||lv===undefined)return{text:'No data',cls:'bc',pct:0,col:'var(--text3)'};if(lv>nm*1.2)return{text:'Flood — no go',cls:'bn',pct:95,col:'var(--red)'};if(lv>nm)return{text:'High — caution',cls:'bc',pct:82,col:'var(--amber)'};if(lv>nm*0.5)return{text:'Normal — fishable',cls:'bg',pct:Math.round((lv/nm)*75),col:'var(--accent)'};if(lv>nm*0.1)return{text:'Low but fishable',cls:'bg',pct:Math.round((lv/nm)*75),col:'var(--accent)'};return{text:'Very low',cls:'bc',pct:8,col:'var(--amber)'};}
-function tClass(t){return t==='falling'?'t-d':t==='rising'?'t-u':'t-s';}
+function lvStat(lv,nMax,trend){
+  const nm=nMax||3;
+  if(lv===null||lv===undefined)return{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
+  const pct=lv/nm;
+  const barPct=Math.min(99,Math.round(pct*90));
+  // >100% — danger to life
+  if(pct>1.0)return{text:'Danger — do not fish',cls:'bn',pct:99,col:'var(--red)',wade:'⚠️ Danger to life. Check with local ghillies.'};
+  // 80–100% — flood, river running dirty
+  if(pct>0.8)return{text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',wade:'River likely running dirty. Check with local ghillies.'};
+  // 60–80% — too high regardless of trend
+  if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',wade:'Unfishable. Wait for the river to fall.'};
+  // 35–60% — depends on trend
+  if(pct>0.35){
+    if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',wade:'River rising fast. Fish unsettled — avoid.'};
+    if(trend==='falling')return{text:'Falling — conditions improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:'Worth fishing. Improving as level drops.'};
+    return{text:'Fishable — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:'Careful approach. River on the high side.'};
+  }
+  // 10–35% — ideal band, trend matters
+  if(pct>0.10){
+    if(trend==='rising')return{text:'Rising — conditions changing',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',wade:'Fish are unsettled as level rises.'};
+    if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:'Perfect wading. Fish are active.'};
+    return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:'Prime wading conditions.'};
+  }
+  // <10% — very low
+  return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',wade:'Fish cautious in clear water. Small fly, long leader.'};
+}function tClass(t){return t==='falling'?'t-d':t==='rising'?'t-u':'t-s';}
 function tArr(t){return t==='falling'?'▼':t==='rising'?'▲':'—';}
 function scoreNow(w,r,nMax,pressureTrend6h){
   let s=5,notes=[];
   if(r&&r.level!==null){
     const nm=nMax||3;
-    if(r.trend==='falling'){s+=2;notes.push('River falling — fish likely active');}
-    else if(r.trend==='rising'){s-=2;notes.push('River rising — fish unsettled');}
-    else notes.push('Level stable');
-    if(r.level<nm*0.1){s-=1;notes.push('Very low water');}
-    else if(r.level<nm*0.5)s+=1;
-    else if(r.level>nm){s-=2;notes.push('Above normal — caution');}
+    const pct=r.level/nm;
+    const trend=r.trend;
+    // Level + trend scoring — mirrors lvStat bands exactly
+    if(pct>1.0){s-=5;notes.push('Danger to life — do not fish');}
+    else if(pct>0.8){s-=4;notes.push('Flood — river running dirty');}
+    else if(pct>0.6){s-=3;notes.push('Too high — unfishable');}
+    else if(pct>0.35){
+      if(trend==='rising'){s-=3;notes.push('Rising fast — fish unsettled');}
+      else if(trend==='falling'){s-=1;notes.push('Falling — conditions improving');}
+      else{s-=2;notes.push('High — careful approach needed');}
+    }else if(pct>0.10){
+      if(trend==='rising'){s-=1;notes.push('Rising — conditions changing');}
+      else if(trend==='falling'){s+=2;notes.push('Ideal level — falling, fish active');}
+      else{s+=1;notes.push('Ideal level — good wading');}
+    }else{
+      s-=1;notes.push('Very low — fish cautious in clear water');
+    }
   }
   if(w){
     const p=w.surface_pressure||1013;
-    // 6h pressure trend matters most
     if(pressureTrend6h>2){s+=2;notes.push('Pressure rising — prime conditions');}
     else if(pressureTrend6h>0.5){s+=1;notes.push('Pressure rising steadily');}
     else if(pressureTrend6h<-2){s-=2;notes.push('Pressure falling sharply');}
@@ -588,7 +848,7 @@ function scoreNow(w,r,nMax,pressureTrend6h){
   }
   s=Math.max(1,Math.min(10,s));
   return{score:s,cls:s>=7?'g':s>=4?'c':'n',
-    label:s>=7?'Good conditions — go fishing':s>=4?'Fair — worth a try':'Poor — no go today',notes};
+    label:s>=7?'Good — go fishing':s>=4?'Fair — worth a try':'Poor — no go today',notes};
 }
 function scoreDay(o){
   let s=5;
@@ -738,13 +998,18 @@ function lvGuide(){return`<div class="lbl">Level interpretation guide</div><div 
 const PROXIES=[u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`];
 async function proxyFetch(url){for(const px of PROXIES){try{const r=await fetch(px(url),{signal:AbortSignal.timeout(9000)});if(r.ok){const t=await r.text();return JSON.parse(t);}}catch(e){}}return null;}
 async function fetchSEPA(key){const st=SEPA[key];if(!st||!st.tsId)return null;const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${st.tsId}&period=P3D&returnfields=Timestamp,Value&format=json`;try{const data=await proxyFetch(url);if(data&&data[0]&&data[0].data&&data[0].data.length>0){const raw=data[0].data.map(x=>({t:x[0],v:parseFloat(x[1])})).filter(x=>!isNaN(x.v));const vals=raw.map(x=>x.v),latest=vals[vals.length-1],prev=vals.length>4?vals[vals.length-5]:vals[0],trend=latest>prev+0.02?'rising':latest<prev-0.02?'falling':'stable';const lastTs=raw[raw.length-1].t;return{level:latest,trend,history:vals.slice(-48),timestamps:raw.slice(-48).map(x=>x.t),gauge:st.gauge,stId:st.stId,nMax:st.nMax,lastUpdated:lastTs};}}catch(e){}return null;}
-async function fetchSEPAById(tsId,stId,label,nMax){const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${tsId}&period=P3D&returnfields=Timestamp,Value&format=json`;try{const data=await proxyFetch(url);if(data&&data[0]&&data[0].data&&data[0].data.length>0){const raw=data[0].data.map(x=>({t:x[0],v:parseFloat(x[1])})).filter(x=>!isNaN(x.v));const vals=raw.map(x=>x.v),latest=vals[vals.length-1],prev=vals.length>4?vals[vals.length-5]:vals[0],trend=latest>prev+0.02?'rising':latest<prev-0.02?'falling':'stable';const lastTs=raw[raw.length-1].t;return{level:latest,trend,history:vals.slice(-48),timestamps:raw.slice(-48).map(x=>x.t),gauge:label,stId,nMax,lastUpdated:lastTs};}}catch(e){}return null;}
-async function fetchWx(lat,lon){try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,{signal:AbortSignal.timeout(9000)});const x=await r.json();return{current:x.current,hourly:x.hourly};}catch(e){return null;}}
-async function fetchFc(lat,lon){try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,surface_pressure_mean,sunrise,sunset&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode&forecast_days=7&timezone=Europe%2FLondon`,{signal:AbortSignal.timeout(9000)});return await r.json();}catch(e){return null;}}
+/* fetchSEPAById — now delegates to cache-aware version; cacheLat/cacheLon optionally set by callers */
+async function fetchSEPAById(tsId,stId,label,nMax,cacheLat,cacheLon){
+  const result=await fetchSEPAByIdWithCache(tsId,stId,label,nMax,cacheLat,cacheLon);
+  return result.data;
+}
+/* fetchWx / fetchFc — thin wrappers; callers that need fromCache info call the *WithCache variants directly */
+async function fetchWx(lat,lon){const r=await fetchWxWithCache(lat,lon);return r.data;}
+async function fetchFc(lat,lon){const r=await fetchFcWithCache(lat,lon);return r.data;}
 async function revGeo(lat,lon){try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`,{signal:AbortSignal.timeout(6000)});const x=await r.json();return x.address?.village||x.address?.town||x.address?.city||x.address?.county||'Your location';}catch(e){return'Your location';}}
 
 /* VIEW SWITCHING */
-function showView(v){document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));const vEl=document.getElementById('view-'+v);if(!vEl)return;vEl.classList.add('active');document.querySelectorAll('.tb').forEach(e=>e.classList.remove('on'));const t=document.getElementById('tab-'+v);if(t)t.classList.add('on');if(v==='rivers')renderRivers();if(v==='beats')renderBeats();if(v==='log')renderLog();if(v==='home')renderHome();}
+function showView(v){document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));const vEl=document.getElementById('view-'+v);if(!vEl)return;vEl.classList.add('active');document.querySelectorAll('.tb').forEach(e=>e.classList.remove('on'));const t=document.getElementById('tab-'+v);if(t)t.classList.add('on');if(v==='rivers')renderRivers();if(v==='beats'){renderBeats();openMyMap();}if(v==='log')renderLog();if(v==='home')renderHome();}
 function switchHTab(tab){curHTab=tab;['now','forecast','river'].forEach(t=>{const el=document.getElementById('here-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('ht-'+t).classList.toggle('on',t===tab);});if(tab==='river'&&hereData.rv)setTimeout(()=>drawRiverGraph(hereData.rv),80);}
 function switchLogTab(tab){curLogTab=tab;['catches','favlocs','pb'].forEach(t=>{const el=document.getElementById('log-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('lt-'+t).classList.toggle('on',t===tab);});if(tab==='catches')renderCatches();if(tab==='favlocs')renderFavLocs();if(tab==='pb')renderPB();}
 function openModal(id){document.getElementById(id).classList.add('show');}
@@ -938,10 +1203,29 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   document.getElementById('here-forecast').innerHTML='';document.getElementById('here-river').innerHTML='';
   curHTab='now';switchHTab('now');
   const st={stId:g.stId,gauge:g.label,nMax:g.nMax,glat,glon};
-  // Weather at user location; SEPA data for this gauge
-  const [wx,fc]=await Promise.all([fetchWx(userLat,userLon),fetchFc(userLat,userLon)]);
-  let rv=null;
-  if(g.tsId) rv=await fetchSEPAById(g.tsId,g.stId,g.label,g.nMax);
+
+  // Use cache-aware fetchers so we get fromCache/ts metadata
+  const [wxRes,fcRes]=await Promise.all([fetchWxWithCache(userLat,userLon),fetchFcWithCache(userLat,userLon)]);
+  const wx=wxRes.data, fc=fcRes.data;
+
+  let rv=null, rvFromCache=false, rvTs=null;
+  if(g.tsId){
+    const rvRes=await fetchSEPAByIdWithCache(g.tsId,g.stId,g.label,g.nMax,userLat,userLon);
+    rv=rvRes.data; rvFromCache=rvRes.fromCache; rvTs=rvRes.ts;
+  }
+
+  // Determine if any data came from cache
+  const anyFromCache = wxRes.fromCache || fcRes.fromCache || rvFromCache;
+  const oldestTs = Math.min(...[wxRes.ts,fcRes.ts,rvTs].filter(Boolean));
+
+  if(!anyFromCache && wx && fc){
+    // Fresh data — write cache and hide banner
+    writeConditionsCache(userLat, userLon, wx, fc, rv);
+    updateOfflineBanner(false);
+  } else if(anyFromCache){
+    updateOfflineBanner(true, isFinite(oldestTs) ? oldestTs : null);
+  }
+
   // Best matching river object for species/catchment info
   const river=RIVERS.find(r=>r.name===g.river)||
     RIVERS.find(r=>g.river.includes(r.name.replace('River ','').replace('Water of ','')))||
@@ -950,7 +1234,7 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   hereData={lat:userLat,lon:userLon,river,wx,rv,fc,st};
   const cond=scoreNow(wx?.current,rv,g.nMax,p6h);
   const alerts=getAlerts(fc);
-  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc);
+  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,anyFromCache?oldestTs:null);
   renderForecast(fc,alerts,g.lag||18);
   renderRiverTab(rv,river,st);
 }
@@ -968,9 +1252,14 @@ async function selectNearbyGauge(idx){
 
 async function loadConditionsForRiver(idx,userLat,userLon,pn){
   const river=RIVERS[idx];
-  // Find the best SEPA gauge for this river — prefer nearest gauge to user
-  const rivGauges=ALL_GAUGES.filter(g=>g.river===river.name||g.sepaKey===river.sepa);
-  let bestGauge=rivGauges.sort((a,b)=>gd(userLat,userLon,a.glat||river.lat,a.glon||river.lon)-gd(userLat,userLon,b.glat||river.lat,b.glon||river.lon))[0];
+  // Gauge matching: exact river name first, then same catchment key — prevents
+  // e.g. Kelvin gauge appearing for River Clyde, or Tummel for River Tay.
+  const exactGauges=ALL_GAUGES.filter(g=>g.river===river.name);
+  const catchGauges=ALL_GAUGES.filter(g=>g.river!==river.name&&g.sepaKey===river.sepa);
+  // Sort each group by distance; prefer exact matches over catchment fallbacks
+  const rank=arr=>arr.filter(g=>g.glat&&g.glon).sort((a,b)=>gd(userLat,userLon,a.glat,a.glon)-gd(userLat,userLon,b.glat,b.glon));
+  const rivGauges=[...rank(exactGauges),...rank(catchGauges)];
+  let bestGauge=rivGauges[0];
   if(bestGauge){
     await loadConditionsForGauge(bestGauge,userLat,userLon,pn||river.name);
     return;
@@ -982,13 +1271,22 @@ async function loadConditionsForRiver(idx,userLat,userLon,pn){
   document.getElementById('here-forecast').innerHTML='';document.getElementById('here-river').innerHTML='';
   curHTab='now';switchHTab('now');
   const st=river.sepa?SEPA[river.sepa]:null;
-  const [wx,fc]=await Promise.all([fetchWx(userLat,userLon),fetchFc(userLat,userLon)]);
+  const [wxRes,fcRes]=await Promise.all([fetchWxWithCache(userLat,userLon),fetchFcWithCache(userLat,userLon)]);
+  const wx=wxRes.data, fc=fcRes.data;
   const rv=null;
+  const anyFromCache=wxRes.fromCache||fcRes.fromCache;
+  const oldestTs=Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean));
+  if(!anyFromCache && wx && fc){
+    writeConditionsCache(userLat,userLon,wx,fc,null);
+    updateOfflineBanner(false);
+  } else if(anyFromCache){
+    updateOfflineBanner(true, isFinite(oldestTs)?oldestTs:null);
+  }
   const p6h=calc6hPressureTrend(wx?.hourly);
   hereData={lat:userLat,lon:userLon,river,wx,rv,fc,st};
   const cond=scoreNow(wx?.current,rv,st?.nMax,p6h);
   const alerts=getAlerts(fc);
-  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc);
+  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,anyFromCache?oldestTs:null);
   renderForecast(fc,alerts,st?.lag||18);
   renderRiverTab(rv,river,st);
 }
@@ -1010,9 +1308,9 @@ async function viewRiver(idx){
 }
 
 /* NOW TAB */
-function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc){
+function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
   const w=wx?.current;
-  const ls=rv?lvStat(rv.level,st?.nMax||3):{text:'No data',cls:'bc',pct:0,col:'var(--text3)'};
+  const ls=rv?lvStat(rv.level,st?.nMax||3,rv.trend):{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
   const p6h=calc6hPressureTrend(hourly||wx?.hourly);
   const pt=pTrend6h(p6h, w?.surface_pressure);
   const pPct=w?Math.round(((w.surface_pressure-960)/(1060-960))*100):50;
@@ -1025,7 +1323,7 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc){
   const gaugeMapLon=(st?.glon||lon).toFixed(6);
   const gaugeLabel=encodeURIComponent(gaugeName!=='—'?gaugeName:river.name);
   const lastUpd=rv?.lastUpdated?` · Updated ${fmtRvTime(rv.lastUpdated)}`:'';
-  const waterTemp=getWaterTemp(hourly||wx?.hourly);
+  const _cacheBadge=cacheTs?cacheBadge(cacheTs):'';
   const wtDisplay=waterTemp!==null?`${waterTemp}°C`:'—';
   const wtNote=waterTemp!==null?(waterTemp<5?'Very cold — deep slow fly'
     :waterTemp<9?'Cold — sink tip recommended'
@@ -1057,8 +1355,9 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc){
   :rv?`<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:21px;font-weight:500;font-family:var(--fd);color:var(--text)">${rv.level.toFixed(2)} m</span><span class="badge ${ls.cls}">${ls.text}</span></div>
   <div style="font-size:12px;color:var(--text3);margin:7px 0 3px;display:flex;gap:14px"><span>Trend <span class="${tClass(rv.trend)}" style="font-weight:500">${tArr(rv.trend)} ${rv.trend}</span></span><span>Normal max: ${(st?.nMax||3).toFixed(2)}m</span></div>
   <div class="lvbar-bg"><div class="lvbar-fill" style="width:${ls.pct}%;background:${ls.col}"></div></div>
-  <div class="lvzr"><span class="lvz">Low</span><span class="lvz">Normal</span><span class="lvz" style="color:var(--ambl)">High</span><span class="lvz" style="color:var(--redl)">Flood</span></div>
-  <div style="font-size:10px;color:var(--text3);margin-top:5px">River graph tab for 48h chart${lastUpd}</div>`
+  <div class="lvzr"><span class="lvz">Low</span><span class="lvz">Ideal</span><span class="lvz" style="color:var(--ambl)">High</span><span class="lvz" style="color:var(--redl)">Flood</span></div>
+  ${ls.wade?`<div style="font-size:11px;font-weight:500;color:${ls.col};margin-top:5px">🦺 ${ls.wade}</div>`:''}
+  <div style="font-size:10px;color:var(--text3);margin-top:5px">River graph tab for 48h chart${lastUpd}${_cacheBadge}</div>`
   :`<div style="font-size:12px;color:var(--text3);margin-bottom:9px">River data unavailable. View on SEPA below.</div>`}
   ${!river.noData?sepaLink(st):''}
 </div>
@@ -1357,33 +1656,164 @@ function toggleFavRiver(name,el){
 }
 
 /* BEATS */
+/* ═══ MY MAP ═══ */
+let _mapReady=false,_leafletMap=null,_pinMarkers={},_mapFilter='all';
+let _pendingPin=null,_editingPinId=null,_placingMarker=null;
+let myPins=JSON.parse(localStorage.getItem('g_pins')||'[]');
+
+const PIN_CATS={
+  parking:{icon:'🅿️',color:'#4285F4',label:'Parking'},
+  access: {icon:'🚶',color:'#4a9e6a',label:'Access point'},
+  pool:   {icon:'🎣',color:'#1D9E75',label:'Fishing pool'},
+  hazard: {icon:'⚠️',color:'#c8922a',label:'Hazard'},
+  note:   {icon:'📝',color:'#7F77DD',label:'Note'},
+};
+function savePins(){localStorage.setItem('g_pins',JSON.stringify(myPins));}
+
+function pinIcon(cat){
+  const c=PIN_CATS[cat]||PIN_CATS.note;
+  return L.divIcon({
+    html:`<div style="width:32px;height:32px;border-radius:50% 50% 50% 0;background:${c.color};transform:rotate(-45deg);border:2px solid rgba(255,255,255,.7);box-shadow:0 2px 6px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:14px;line-height:1">${c.icon}</span></div>`,
+    className:'',iconSize:[32,32],iconAnchor:[16,32],popupAnchor:[0,-34]
+  });
+}
+
+function initMap(){
+  if(_mapReady)return;
+  if(typeof L==='undefined')return;
+  const mapEl=document.getElementById('leaflet-map');
+  if(!mapEl||mapEl.offsetHeight===0)return;
+  _leafletMap=L.map('leaflet-map',{center:[56.8,-4.0],zoom:7,zoomControl:true});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© OpenStreetMap © CARTO',maxZoom:19,subdomains:'abcd'
+  }).addTo(_leafletMap);
+  _leafletMap.on('click',e=>{
+    if(_pendingPin){
+      _pendingPin.lat=e.latlng.lat;_pendingPin.lon=e.latlng.lng;
+      document.getElementById('pin-loc-display').textContent=`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
+      updatePlacingMarker(e.latlng.lat,e.latlng.lng);
+    }
+  });
+  _mapReady=true;
+  renderPins();
+}
+
+function loadLeaflet(cb){
+  if(typeof L!=='undefined'){cb();return;}
+  const s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+  s.onload=cb;document.head.appendChild(s);
+}
+
+function openMyMap(){
+  loadLeaflet(()=>setTimeout(()=>{initMap();if(_leafletMap)_leafletMap.invalidateSize();},80));
+}
+
+function renderPins(){
+  if(!_mapReady||!_leafletMap)return;
+  Object.values(_pinMarkers).forEach(m=>_leafletMap.removeLayer(m));
+  _pinMarkers={};
+  const filtered=myPins.filter(p=>_mapFilter==='all'||p.cat===_mapFilter);
+  const emptyEl=document.getElementById('map-empty');
+  if(emptyEl)emptyEl.style.display=myPins.length===0?'flex':'none';
+  filtered.forEach(pin=>{
+    const m=L.marker([pin.lat,pin.lon],{icon:pinIcon(pin.cat)}).addTo(_leafletMap);
+    const c=PIN_CATS[pin.cat]||PIN_CATS.note;
+    m.bindPopup(`<div class="lf-pop-title">${c.icon} ${pin.name}</div><div class="lf-pop-cat">${c.label}${pin.river?' · '+pin.river:''}</div>${pin.notes?`<div class="lf-pop-notes">${pin.notes}</div>`:''}<span class="lf-pop-edit" onclick="editPin('${pin.id}')">✏️ Edit</span>`);
+    _pinMarkers[pin.id]=m;
+  });
+}
+
+function setMapFilter(cat,btn){
+  _mapFilter=cat;
+  document.querySelectorAll('.mpill').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');renderPins();
+}
+
+function startAddPin(){
+  _editingPinId=null;
+  _pendingPin={cat:'parking',lat:null,lon:null};
+  document.getElementById('pin-modal-title').textContent='Add pin';
+  document.getElementById('pin-name').value='';
+  document.getElementById('pin-river').value='';
+  document.getElementById('pin-notes').value='';
+  document.getElementById('pin-loc-display').textContent='Tap map to place, or use GPS';
+  document.getElementById('pin-delete-btn').style.display='none';
+  document.querySelectorAll('.pcat-btn').forEach(b=>b.classList.toggle('on',b.dataset.cat==='parking'));
+  openModal('modal-pin');
+}
+
+function editPin(id){
+  const pin=myPins.find(p=>p.id===id);if(!pin)return;
+  _editingPinId=id;
+  _pendingPin={cat:pin.cat,lat:pin.lat,lon:pin.lon};
+  document.getElementById('pin-modal-title').textContent='Edit pin';
+  document.getElementById('pin-name').value=pin.name;
+  document.getElementById('pin-river').value=pin.river||'';
+  document.getElementById('pin-notes').value=pin.notes||'';
+  document.getElementById('pin-loc-display').textContent=`${pin.lat.toFixed(5)}, ${pin.lon.toFixed(5)}`;
+  document.getElementById('pin-delete-btn').style.display='block';
+  document.querySelectorAll('.pcat-btn').forEach(b=>b.classList.toggle('on',b.dataset.cat===pin.cat));
+  openModal('modal-pin');
+  if(_leafletMap)_leafletMap.closePopup();
+}
+
+function selectPinCat(cat,btn){
+  _pendingPin=_pendingPin||{};_pendingPin.cat=cat;
+  document.querySelectorAll('.pcat-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  if(_placingMarker&&_pendingPin.lat)updatePlacingMarker(_pendingPin.lat,_pendingPin.lon);
+}
+
+function updatePlacingMarker(lat,lon){
+  if(_placingMarker){_leafletMap.removeLayer(_placingMarker);_placingMarker=null;}
+  if(lat&&lon)_placingMarker=L.marker([lat,lon],{icon:pinIcon(_pendingPin?.cat||'note'),opacity:.7}).addTo(_leafletMap);
+}
+
+async function pinUseGPS(){
+  document.getElementById('pin-loc-display').textContent='Getting GPS…';
+  try{
+    const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,enableHighAccuracy:true}));
+    _pendingPin=_pendingPin||{};
+    _pendingPin.lat=pos.coords.latitude;_pendingPin.lon=pos.coords.longitude;
+    document.getElementById('pin-loc-display').textContent=`${_pendingPin.lat.toFixed(5)}, ${_pendingPin.lon.toFixed(5)}`;
+    updatePlacingMarker(_pendingPin.lat,_pendingPin.lon);
+    if(_leafletMap)_leafletMap.setView([_pendingPin.lat,_pendingPin.lon],14);
+  }catch(e){document.getElementById('pin-loc-display').textContent='GPS unavailable — tap map to place';}
+}
+
+function savePin(){
+  const name=document.getElementById('pin-name').value.trim();
+  if(!name){toast('Please enter a name');return;}
+  if(!_pendingPin?.lat){toast('Tap the map or use GPS to place the pin');return;}
+  if(_editingPinId){
+    const idx=myPins.findIndex(p=>p.id===_editingPinId);
+    if(idx>=0)myPins[idx]={...myPins[idx],cat:_pendingPin.cat,lat:_pendingPin.lat,lon:_pendingPin.lon,
+      name,river:document.getElementById('pin-river').value.trim(),notes:document.getElementById('pin-notes').value.trim()};
+    toast('Pin updated ✓');
+  }else{
+    myPins.push({id:'pin_'+Date.now(),cat:_pendingPin.cat,lat:_pendingPin.lat,lon:_pendingPin.lon,
+      name,river:document.getElementById('pin-river').value.trim(),notes:document.getElementById('pin-notes').value.trim(),savedAt:Date.now()});
+    toast(`${PIN_CATS[_pendingPin.cat]?.icon||'📍'} ${name} saved`);
+  }
+  savePins();closePinModal();renderPins();
+  if(_leafletMap&&_pendingPin?.lat)_leafletMap.setView([_pendingPin.lat,_pendingPin.lon],14);
+}
+
+function deletePin(){
+  if(!_editingPinId)return;
+  myPins=myPins.filter(p=>p.id!==_editingPinId);
+  savePins();closePinModal();renderPins();toast('Pin removed');
+}
+
+function closePinModal(){
+  closeModal('modal-pin');
+  if(_placingMarker&&_leafletMap){_leafletMap.removeLayer(_placingMarker);_placingMarker=null;}
+  _pendingPin=null;_editingPinId=null;
+}
+
 function renderBeats(){
-  const br=b=>`<a href="${b.url}" class="lr" target="_blank"><div><div class="ln">${b.name}</div><div class="ls">${b.sub}</div></div><span class="la">↗</span></a>`;
-  const speciesRef=Object.values(SPECIES_DATA).map(s=>`
-    <div class="cf" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-      <div style="display:flex;align-items:center;gap:10px;justify-content:space-between">
-        <div><span style="font-size:14px">${s.icon}</span> <span style="font-size:13px;font-weight:500;color:var(--text)">${s.name}</span></div>
-        <span style="font-size:10px;color:var(--text3)">${s.season} ▼</span>
-      </div>
-    </div>
-    <div style="display:none;background:var(--bg4);border-radius:0 0 10px 10px;padding:10px 13px 12px;margin-top:-4px;margin-bottom:4px">
-      <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:8px">${s.desc}</div>
-      ${s.tactics.map(a=>`<div class="tr2"><span class="tk">${a.k}</span><span class="tv">${a.v}</span></div>`).join('')}
-    </div>`).join('');
-  const el=document.getElementById('beats-scroll');
-  if(!el)return;
-  el.innerHTML=`
-    <div class="lbl">Book a beat</div>
-    ${BEATS.map(br).join('')}
-    <div class="lbl" style="margin-top:3px">River boards & clubs</div>
-    ${CLUBS.map(br).join('')}
-    <div class="lbl" style="margin-top:3px">Loch & stillwater fisheries</div>
-    ${LOCHS_DATA.map(br).join('')}
-    <div class="lbl" style="margin-top:3px">Species reference</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Tap any species for tactics, seasons and fly selection</div>
-    ${speciesRef}
-    <div style="height:10px"></div>
-  `;
+  if(document.getElementById('view-beats')?.classList.contains('active'))openMyMap();
 }
 
 /* LOG */
@@ -1481,6 +1911,8 @@ setInterval(tick,30000);tick();
 
 /* INIT */
 renderHome();renderBeats();
+// Initial offline check
+if(!navigator.onLine) updateOfflineBanner(true, null);
 </script>
 </body>
 </html>
