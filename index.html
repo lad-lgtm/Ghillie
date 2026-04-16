@@ -465,7 +465,7 @@ async function fetchWxWithCache(lat, lon) {
   try {
     const r = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,
-      { signal: AbortSignal.timeout(7000) }
+      { signal: AbortSignal.timeout(5000) }
     );
     if(!r.ok) throw new Error('wx fetch failed');
     const x = await r.json();
@@ -481,7 +481,7 @@ async function fetchFcWithCache(lat, lon) {
   try {
     const r = await fetch(
       `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,surface_pressure_mean,sunrise,sunset&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode&forecast_days=7&timezone=Europe%2FLondon`,
-      { signal: AbortSignal.timeout(7000) }
+      { signal: AbortSignal.timeout(5000) }
     );
     if(!r.ok) throw new Error('fc fetch failed');
     return { data: await r.json(), fromCache: false };
@@ -1240,10 +1240,24 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   }
 
   if(wxRes.fromCache && fcRes.fromCache){
-    updateOfflineBanner(true, isFinite(Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean))) ? Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean)) : null);
-  } else {
-    updateOfflineBanner(false);
+    // Offline / network blocked — render from cache immediately, skip live SEPA fetch
+    const cachedRv = readConditionsCache(userLat, userLon)?.rv || null;
+    const cacheTs = Math.min(...[wxRes.ts, fcRes.ts].filter(Boolean));
+    updateOfflineBanner(true, isFinite(cacheTs) ? cacheTs : null);
+    const river=RIVERS.find(r=>r.name===g.river)||
+      RIVERS.find(r=>g.river.includes(r.name.replace('River ','').replace('Water of ','')))||
+      {name:g.river,lat:glat,lon:glon,sepa:g.sepaKey,cat:g.catKey,catchment:g.river,species:'—',icon:'🐟',noData:!g.tsId};
+    const p6h=calc6hPressureTrend(wx?.hourly);
+    const alerts=getAlerts(fc);
+    hereData={lat:userLat,lon:userLon,river,wx,rv:cachedRv,fc,st};
+    const cond=scoreNow(wx?.current,cachedRv,g.nMax,p6h);
+    document.getElementById('here-now').innerHTML=buildNow(river,null,wx,cachedRv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,isFinite(cacheTs)?cacheTs:null);
+    renderForecast(fc,alerts,g.lag||18);
+    renderRiverTab(cachedRv,river,st);
+    return;
   }
+
+  updateOfflineBanner(false);
 
   // Render immediately with no river data so page is never blank
   const river=RIVERS.find(r=>r.name===g.river)||
@@ -1325,11 +1339,11 @@ async function loadConditionsForRiver(idx,userLat,userLon,pn){
   const wx=wxRes.data, fc=fcRes.data;
   const rv=null;
   const oldestTs=Math.min(...[wxRes.ts,fcRes.ts].filter(Boolean));
-  if(!wxRes.fromCache && !fcRes.fromCache){
+  if(wxRes.fromCache && fcRes.fromCache){
+    updateOfflineBanner(true, isFinite(oldestTs)?oldestTs:null);
+  } else {
     writeConditionsCache(userLat,userLon,wx,fc,null);
     updateOfflineBanner(false);
-  } else if(wxRes.fromCache && fcRes.fromCache){
-    updateOfflineBanner(true, isFinite(oldestTs)?oldestTs:null);
   }
   const anyFromCache=wxRes.fromCache&&fcRes.fromCache;
   const p6h=calc6hPressureTrend(wx?.hourly);
