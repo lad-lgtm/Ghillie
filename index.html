@@ -6,6 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ghillie">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Ghillie — Scotland Fishing</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
@@ -1227,6 +1228,7 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   window._lastGauge={g,lat:userLat,lon:userLon,pn};
 
   // ── Step 1: Load weather first — render page immediately when ready ──
+  setLoadingStep('Fetching weather…');
   const [wxRes,fcRes]=await Promise.all([fetchWxWithCache(userLat,userLon),fetchFcWithCache(userLat,userLon)]);
   const wx=wxRes.data, fc=fcRes.data;
 
@@ -1258,8 +1260,8 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   // ── Step 2: Load SEPA river data in background — update when ready ──
   if(g.tsId){
     // Show a subtle "loading river data..." note in the river level card
-    const rvCard=document.querySelector('.lvbar-bg');
-    if(rvCard)rvCard.closest('.card')?.querySelector('.lbl+.card')?.setAttribute('data-loading-rv','1');
+    const rvLevelEl=document.querySelector('[data-rv-loading]');
+    if(rvLevelEl)rvLevelEl.textContent='Loading river data…';
 
     const rvRes=await fetchSEPAByIdWithCache(g.tsId,g.stId,g.label,g.nMax,userLat,userLon);
     const rv=rvRes.data;
@@ -1340,7 +1342,11 @@ async function loadConditionsForRiver(idx,userLat,userLon,pn){
 }
 
 function setLoadingNow(msg){
-  document.getElementById('here-now').innerHTML=`<div class="lw"><div class="spinner"></div><p style="font-size:12px;color:var(--text3)">${msg}</p></div>`;
+  document.getElementById('here-now').innerHTML=`<div class="lw"><div class="spinner"></div><p id="loading-msg" style="font-size:12px;color:var(--text3)">${msg}</p></div>`;
+}
+function setLoadingStep(msg){
+  const el=document.getElementById('loading-msg');
+  if(el)el.textContent=msg;
 }
 
 async function goHere(){showView('here');doGPS();}
@@ -1406,6 +1412,7 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
   <div class="lvzr"><span class="lvz">Low</span><span class="lvz">Ideal</span><span class="lvz" style="color:var(--ambl)">High</span><span class="lvz" style="color:var(--redl)">Flood</span></div>
   ${ls.wade?`<div style="font-size:11px;font-weight:500;color:${ls.col};margin-top:5px">🦺 ${ls.wade}</div>`:''}
   <div style="font-size:10px;color:var(--text3);margin-top:5px">River graph tab for 48h chart${lastUpd}${_cacheBadge}</div>`
+  :st?.tsId?`<div style="display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text3)" data-rv-loading="1"><div class="spinner" style="width:16px;height:16px;border-width:2px;flex-shrink:0"></div>Loading river level…</div>`
   :`<div style="font-size:12px;color:var(--text3);margin-bottom:9px">River data unavailable. View on SEPA below.</div>`}
   ${!river.noData?sepaLink(st):''}
 </div>
