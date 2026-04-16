@@ -301,22 +301,31 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
   </div>
   <div id="map-container" style="flex:1;position:relative;min-height:0">
     <div id="leaflet-map" style="width:100%;height:100%"></div>
+    <!-- tap to place banner — shown when picking a pin location -->
+    <div id="map-tap-banner" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(74,158,106,.95);color:#fff;font-size:13px;font-weight:500;padding:10px 18px;border-radius:22px;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.3);pointer-events:none">
+      Tap the map to place your pin
+    </div>
+    <!-- cancel placing button -->
+    <button id="map-place-cancel" onclick="cancelPinPlace()" style="display:none;position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:20px;padding:9px 20px;font-size:13px;font-weight:500;color:#333;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)">✕ Cancel</button>
     <!-- current location button -->
     <button onclick="mapGoToMyLocation()" title="My location" style="position:absolute;bottom:16px;right:12px;z-index:1000;width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.15);box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center">📍</button>
     <!-- empty state overlay -->
-    <div id="map-empty" style="display:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;background:rgba(14,26,18,.7)">
+    <div id="map-empty" style="display:none;position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;z-index:500;background:rgba(255,255,255,.7)">
       <div style="font-size:38px">📍</div>
-      <div style="font-size:14px;font-weight:500;color:var(--text)">No pins yet</div>
-      <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.5;padding:0 30px">Tap "+ Add pin" to mark parking spots, access points, favourite pools and hazards</div>
+      <div style="font-size:14px;font-weight:500;color:#1a2e1f">No pins yet</div>
+      <div style="font-size:12px;color:#4a6650;text-align:center;line-height:1.5;padding:0 30px">Tap "+ Add pin" to mark parking spots, access points, favourite pools and hazards</div>
     </div>
   </div>
 </div>
 
 <!-- ADD / EDIT PIN MODAL -->
-<div class="modal-overlay" id="modal-pin" onclick="closePinModal()">
+<div class="modal-overlay" id="modal-pin">
   <div class="modal" onclick="event.stopPropagation()" style="max-height:90vh">
     <div class="mh"></div>
-    <div class="mt" id="pin-modal-title">Add pin</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div class="mt" id="pin-modal-title" style="margin:0">Add pin</div>
+      <button onclick="closePinModal()" style="background:none;border:none;font-size:20px;color:var(--text3);cursor:pointer;padding:2px 6px;line-height:1">✕</button>
+    </div>
     <div style="display:flex;flex-direction:column;gap:11px">
       <div class="fg">
         <label class="fl">Category</label>
@@ -342,9 +351,10 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
       </div>
       <div class="fg">
         <label class="fl">Location</label>
-        <div style="display:flex;gap:8px;align-items:center">
-          <div id="pin-loc-display" style="flex:1;font-size:12px;color:var(--text3);padding:9px 11px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px">Tap map to place, or use GPS</div>
-          <button onclick="pinUseGPS()" style="flex-shrink:0;padding:9px 12px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:var(--fb);font-size:12px;cursor:pointer">📍 GPS</button>
+        <div id="pin-loc-display" style="font-size:12px;color:var(--text3);padding:8px 11px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;margin-bottom:7px;min-height:36px;display:flex;align-items:center">Not placed yet</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="pinPickOnMap()" style="flex:1;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:var(--fb);font-size:12px;cursor:pointer;font-weight:500">🗺 Pick on map</button>
+          <button onclick="pinUseGPS()" style="flex:1;padding:9px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:var(--fb);font-size:12px;cursor:pointer;font-weight:500">📍 Use GPS</button>
         </div>
       </div>
       <button class="bp" onclick="savePin()">Save pin</button>
@@ -1746,7 +1756,7 @@ function toggleFavRiver(name,el){
 /* BEATS */
 /* ═══ MY MAP ═══ */
 let _mapReady=false,_leafletMap=null,_pinMarkers={},_mapFilter='all';
-let _pendingPin=null,_editingPinId=null,_placingMarker=null;
+let _pendingPin=null,_editingPinId=null,_placingMarker=null,_placingMode=false;
 let myPins=JSON.parse(localStorage.getItem('g_pins')||'[]');
 
 const PIN_CATS={
@@ -1776,11 +1786,20 @@ function initMap(){
     attribution:'© OpenStreetMap © CARTO',maxZoom:19,subdomains:'abcd'
   }).addTo(_leafletMap);
   _leafletMap.on('click',e=>{
-    if(_pendingPin){
-      _pendingPin.lat=e.latlng.lat;_pendingPin.lon=e.latlng.lng;
-      document.getElementById('pin-loc-display').textContent=`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
-      updatePlacingMarker(e.latlng.lat,e.latlng.lng);
-    }
+    if(!_placingMode) return;
+    // User tapped map to place pin
+    _pendingPin=_pendingPin||{cat:'parking'};
+    _pendingPin.lat=e.latlng.lat;
+    _pendingPin.lon=e.latlng.lng;
+    updatePlacingMarker(e.latlng.lat,e.latlng.lng);
+    // Hide placing UI and reopen modal
+    _placingMode=false;
+    document.getElementById('map-tap-banner').style.display='none';
+    document.getElementById('map-place-cancel').style.display='none';
+    openModal('modal-pin');
+    // Update location display in modal
+    const locEl=document.getElementById('pin-loc-display');
+    if(locEl)locEl.textContent=`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
   });
   _mapReady=true;
   renderPins();
@@ -1818,6 +1837,22 @@ function setMapFilter(cat,btn){
   btn.classList.add('on');renderPins();
 }
 
+function pinPickOnMap(){
+  // Save current form state, close modal, enter picking mode
+  closeModal('modal-pin');
+  _placingMode=true;
+  document.getElementById('map-tap-banner').style.display='block';
+  document.getElementById('map-place-cancel').style.display='block';
+}
+
+function cancelPinPlace(){
+  _placingMode=false;
+  document.getElementById('map-tap-banner').style.display='none';
+  document.getElementById('map-place-cancel').style.display='none';
+  // Reopen modal if we were in the middle of adding
+  if(_pendingPin!==null) openModal('modal-pin');
+}
+
 function startAddPin(){
   _editingPinId=null;
   _pendingPin={cat:'parking',lat:null,lon:null};
@@ -1825,7 +1860,7 @@ function startAddPin(){
   document.getElementById('pin-name').value='';
   document.getElementById('pin-river').value='';
   document.getElementById('pin-notes').value='';
-  document.getElementById('pin-loc-display').textContent='Tap map to place, or use GPS';
+  document.getElementById('pin-loc-display').textContent='Not placed yet';
   document.getElementById('pin-delete-btn').style.display='none';
   document.querySelectorAll('.pcat-btn').forEach(b=>b.classList.toggle('on',b.dataset.cat==='parking'));
   openModal('modal-pin');
