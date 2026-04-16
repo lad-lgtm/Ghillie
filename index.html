@@ -1392,6 +1392,7 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
   const gaugeLabel=encodeURIComponent(gaugeName!=='—'?gaugeName:river.name);
   const lastUpd=rv?.lastUpdated?` · Updated ${fmtRvTime(rv.lastUpdated)}`:'';
   const _cacheBadge=cacheTs?cacheBadge(cacheTs):'';
+  const waterTemp=getWaterTemp(hourly||wx?.hourly);
   const wtDisplay=waterTemp!==null?`${waterTemp}°C`:'—';
   const wtNote=waterTemp!==null?(waterTemp<5?'Very cold — deep slow fly'
     :waterTemp<9?'Cold — sink tip recommended'
