@@ -1921,19 +1921,20 @@ async function pinUseGPS(){
 function savePin(){
   const name=document.getElementById('pin-name').value.trim();
   if(!name){toast('Please enter a name');return;}
-  if(!_pendingPin?.lat){toast('Tap the map or use GPS to place the pin');return;}
+  if(!_pendingPin?.lat){toast('Place the pin on the map or use GPS first');return;}
+  const savedLat=_pendingPin.lat, savedLon=_pendingPin.lon;
   if(_editingPinId){
     const idx=myPins.findIndex(p=>p.id===_editingPinId);
-    if(idx>=0)myPins[idx]={...myPins[idx],cat:_pendingPin.cat,lat:_pendingPin.lat,lon:_pendingPin.lon,
+    if(idx>=0)myPins[idx]={...myPins[idx],cat:_pendingPin.cat,lat:savedLat,lon:savedLon,
       name,river:document.getElementById('pin-river').value.trim(),notes:document.getElementById('pin-notes').value.trim()};
     toast('Pin updated ✓');
   }else{
-    myPins.push({id:'pin_'+Date.now(),cat:_pendingPin.cat,lat:_pendingPin.lat,lon:_pendingPin.lon,
+    myPins.push({id:'pin_'+Date.now(),cat:_pendingPin.cat,lat:savedLat,lon:savedLon,
       name,river:document.getElementById('pin-river').value.trim(),notes:document.getElementById('pin-notes').value.trim(),savedAt:Date.now()});
     toast(`${PIN_CATS[_pendingPin.cat]?.icon||'📍'} ${name} saved`);
   }
   savePins();closePinModal();renderPins();
-  if(_leafletMap&&_pendingPin?.lat)_leafletMap.setView([_pendingPin.lat,_pendingPin.lon],14);
+  if(_leafletMap)_leafletMap.setView([savedLat,savedLon],14);
 }
 
 function deletePin(){
@@ -1944,6 +1945,9 @@ function deletePin(){
 
 function closePinModal(){
   closeModal('modal-pin');
+  _placingMode=false;
+  const tb=document.getElementById('map-tap-banner');if(tb)tb.style.display='none';
+  const cb=document.getElementById('map-place-cancel');if(cb)cb.style.display='none';
   if(_placingMarker&&_leafletMap){_leafletMap.removeLayer(_placingMarker);_placingMarker=null;}
   _pendingPin=null;_editingPinId=null;
 }
