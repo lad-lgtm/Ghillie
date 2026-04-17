@@ -515,7 +515,17 @@ async function fetchFcWithCache(lat, lon) {
 }
 
 async function fetchSEPAByIdWithCache(tsId, stId, label, nMax, cacheLat, cacheLon) {
-  const url = `https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${tsId}&period=P3D&returnfields=Timestamp,Value&format=json`;
+  // If no tsId, attempt to discover it from SEPA API
+  let resolvedTsId=tsId;
+  if(!resolvedTsId&&stId){
+    resolvedTsId=await discoverTsId(stId);
+  }
+  if(!resolvedTsId){
+    // No tsId discoverable — fall back to cache only
+    if(cacheLat&&cacheLon){const cached=readConditionsCache(cacheLat,cacheLon);if(cached?.rv)return{data:cached.rv,fromCache:true,ts:cached.ts};}
+    return{data:null,fromCache:true,ts:null};
+  }
+  const url = `https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${resolvedTsId}&period=P3D&returnfields=Timestamp,Value&format=json`;
   try {
     const data = await proxyFetch(url);
     if (data && data[0] && data[0].data && data[0].data.length > 0) {
@@ -556,6 +566,12 @@ const SEPA={
   leith:{stId:'14868',tsId:'54261010',gauge:'Water of Leith at Murrayfield',nMax:1.764,glat:55.9361,glon:-3.2583,lag:6},
   earn:{stId:'14970',tsId:'55685010',gauge:'Earn at Forteviot',nMax:2.793,glat:56.3208,glon:-3.4556,lag:18},
   annan:{stId:'133143',tsId:null,gauge:'Annan at Woodfoot',nMax:2.5,glat:55.1528,glon:-3.2639,lag:10},
+  /* Tweed tributaries — own SEPA entries so they don't fall back to Tweed at Peebles */
+  ettrick:{stId:'14990',tsId:null,gauge:'Ettrick at Lindean',nMax:2.29,glat:55.5722,glon:-2.8889,lag:4},
+  gala:   {stId:'9683', tsId:null,gauge:'Gala Water at Galashiels',nMax:2.0,glat:55.6139,glon:-2.8028,lag:3},
+  yarrow: {stId:'14985',tsId:null,gauge:'Yarrow at Philiphaugh',nMax:1.8,glat:55.5378,glon:-2.9556,lag:3},
+  leader: {stId:'14988',tsId:null,gauge:'Leader at Earlston',nMax:1.9,glat:55.6500,glon:-2.6667,lag:3},
+  lyne:   {stId:'14976',tsId:null,gauge:'Lyne at Lyne Station',nMax:1.5,glat:55.6389,glon:-3.2917,lag:3},
 };
 const CATCHMENTS={
   tay:[
@@ -615,8 +631,13 @@ const ALL_GAUGES = (()=>{
     {key:'nith',     river:'River Nith'},
     {key:'clyde',    river:'River Clyde'},
     {key:'leith',    river:'Water of Leith'},
-    {key:'earn',     river:'River Earn'},
-    {key:'annan',    river:'River Annan'},
+    {key:'earn',    river:'River Earn'},
+    {key:'annan',   river:'River Annan'},
+    {key:'ettrick', river:'Ettrick Water'},
+    {key:'gala',    river:'Gala Water'},
+    {key:'yarrow',  river:'Yarrow Water'},
+    {key:'leader',  river:'Leader Water'},
+    {key:'lyne',    river:'Lyne Water'},
   ];
   sepaEntries.forEach(e=>{
     const st=SEPA[e.key];
@@ -647,8 +668,8 @@ const ALL_GAUGES = (()=>{
     {label:'Naver at Apigill',         river:'River Naver',   stId:'234285',tsId:null,nMax:1.8,glat:58.2722,glon:-4.2472,sepaKey:'helmsdale',catKey:null},
     {label:'Ayr at Catrine',           river:'River Ayr',     stId:'133101',tsId:null,nMax:2.0,glat:55.5056,glon:-4.3306,sepaKey:'nith',catKey:null},
     {label:'Doon at Dalrymple',        river:'River Doon',    stId:'133106',tsId:null,nMax:2.2,glat:55.3694,glon:-4.6028,sepaKey:'nith',catKey:null},
-    {label:'Ettrick at Lindean',       river:'Ettrick Water', stId:'14970',tsId:null,nMax:2.5,glat:55.5722,glon:-2.8889,sepaKey:'tweed',catKey:null},
-    {label:'Gala Water at Galashiels', river:'Gala Water',    stId:'14971',tsId:null,nMax:2.0,glat:55.6139,glon:-2.8028,sepaKey:'tweed',catKey:null},
+    {label:'Ettrick at Lindean',       river:'Ettrick Water', stId:'14990',tsId:null,nMax:2.29,glat:55.5722,glon:-2.8889,sepaKey:'ettrick',catKey:null},
+    {label:'Gala Water at Galashiels', river:'Gala Water',    stId:'9683', tsId:null,nMax:2.0, glat:55.6139,glon:-2.8028,sepaKey:'gala',catKey:null},
     {label:'Allan Water at Bridge of Allan',river:'River Allan',stId:'133092',tsId:null,nMax:2.2,glat:56.1583,glon:-3.8528,sepaKey:'clyde',catKey:null},
     {label:'Forth at Craigforth',      river:'River Forth',   stId:'133088',tsId:null,nMax:3.0,glat:56.1139,glon:-3.9167,sepaKey:'clyde',catKey:null},
     {label:'Ness at Ness-side',        river:'River Ness',    stId:'234320',tsId:null,nMax:2.5,glat:57.4583,glon:-4.2194,sepaKey:'spey',catKey:null},
@@ -724,11 +745,11 @@ const RIVERS=[
   {name:'Water of Leith (Colinton)',lat:55.907,lon:-3.253,sepa:'leith',cat:null,catchment:'Almond Group',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'River Kelvin',lat:55.880,lon:-4.280,sepa:'clyde',cat:'clyde',catchment:'Kelvin',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'River Almond (Lothian)',lat:55.957,lon:-3.452,sepa:'leith',cat:null,catchment:'Almond Group',species:'Brown trout, Sea trout',icon:'🐟'},
-  {name:'Lyne Water',lat:55.640,lon:-3.250,sepa:'tweed',cat:'tweed',catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
-  {name:'Ettrick Water',lat:55.548,lon:-2.933,sepa:'tweed',cat:'tweed',catchment:'Tweed',species:'Brown trout, Sea trout',icon:'🐟'},
-  {name:'Yarrow Water',lat:55.530,lon:-3.030,sepa:'tweed',cat:'tweed',catchment:'Tweed',species:'Brown trout, Grayling',icon:'🐟'},
-  {name:'Gala Water',lat:55.617,lon:-2.817,sepa:'tweed',cat:'tweed',catchment:'Tweed',species:'Brown trout, Grayling',icon:'🐟'},
-  {name:'Leader Water',lat:55.700,lon:-2.763,sepa:'tweed',cat:'tweed',catchment:'Tweed',species:'Brown trout, Sea trout',icon:'🐟'},
+  {name:'Lyne Water',lat:55.640,lon:-3.250,sepa:'lyne',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
+  {name:'Ettrick Water',lat:55.548,lon:-2.933,sepa:'ettrick',cat:null,catchment:'Tweed tributary',species:'Brown trout, Sea trout',icon:'🐟'},
+  {name:'Yarrow Water',lat:55.530,lon:-3.030,sepa:'yarrow',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
+  {name:'Gala Water',lat:55.617,lon:-2.817,sepa:'gala',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
+  {name:'Leader Water',lat:55.700,lon:-2.763,sepa:'leader',cat:null,catchment:'Tweed tributary',species:'Brown trout, Sea trout',icon:'🐟'},
   {name:'Water of Ae',lat:55.100,lon:-3.552,sepa:'nith',cat:null,catchment:'Nith',species:'Brown trout',icon:'🐟'},
   {name:'Scar Water',lat:55.210,lon:-3.741,sepa:'nith',cat:null,catchment:'Nith',species:'Brown trout, Sea trout',icon:'🐟'},
   {name:'Crawick Water',lat:55.310,lon:-3.876,sepa:'nith',cat:null,catchment:'Nith',species:'Brown trout, Grayling',icon:'🐟'},
@@ -1116,6 +1137,30 @@ async function proxyFetch(url){
   const results=await Promise.allSettled(attempts);
   const winner=results.find(r=>r.status==='fulfilled');
   return winner?winner.value:null;
+}
+
+/* Discover the stage timeseries ID for a station that has tsId:null.
+   Queries SEPA getTimeseriesList, picks the first Stage/HG timeseries,
+   caches result in localStorage so it only runs once per station. */
+const _tsIdCache={};
+async function discoverTsId(stId){
+  if(_tsIdCache[stId])return _tsIdCache[stId];
+  const lsKey=`g_tsid_${stId}`;
+  const cached=localStorage.getItem(lsKey);
+  if(cached){_tsIdCache[stId]=cached;return cached;}
+  try{
+    const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesList&format=json&station_no=${stId}&stationparameter_name=Stage&returnfields=ts_id,ts_name`;
+    const data=await proxyFetch(url);
+    if(data&&Array.isArray(data)&&data.length>0){
+      // Prefer ts_name containing 'Mean' or 'Cmd' (15-min mean), fall back to first
+      const preferred=data.find(d=>d.ts_name&&(d.ts_name.includes('Mean')||d.ts_name.includes('Cmd')))||data[0];
+      const tsId=String(preferred.ts_id);
+      _tsIdCache[stId]=tsId;
+      localStorage.setItem(lsKey,tsId);
+      return tsId;
+    }
+  }catch(e){}
+  return null;
 }
 async function fetchSEPA(key){const st=SEPA[key];if(!st||!st.tsId)return null;const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesValues&ts_id=${st.tsId}&period=P3D&returnfields=Timestamp,Value&format=json`;try{const data=await proxyFetch(url);if(data&&data[0]&&data[0].data&&data[0].data.length>0){const raw=data[0].data.map(x=>({t:x[0],v:parseFloat(x[1])})).filter(x=>!isNaN(x.v));const vals=raw.map(x=>x.v),latest=vals[vals.length-1],prev=vals.length>4?vals[vals.length-5]:vals[0],trend=latest>prev+0.02?'rising':latest<prev-0.02?'falling':'stable';const lastTs=raw[raw.length-1].t;return{level:latest,trend,history:vals.slice(-48),timestamps:raw.slice(-48).map(x=>x.t),gauge:st.gauge,stId:st.stId,nMax:st.nMax,lastUpdated:lastTs};}}catch(e){}return null;}
 /* fetchSEPAById — now delegates to cache-aware version; cacheLat/cacheLon optionally set by callers */
