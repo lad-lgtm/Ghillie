@@ -731,66 +731,66 @@ const ALL_GAUGES = (()=>{
   return gauges;
 })();
 const RIVERS=[
-  {name:'River Tay',lat:56.558,lon:-3.631,sepa:'tay',cat:'tay',catchment:'Upper Tay',species:'Salmon, Sea trout, Grayling',icon:'🐟'},
-  {name:'River Spey',lat:57.329,lon:-3.543,sepa:'spey',cat:'spey',catchment:'Speyside',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
-  {name:'River Dee (Aberdeenshire)',lat:57.066,lon:-2.502,sepa:'dee_ab',cat:'dee_ab',catchment:'Deeside',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Tweed',lat:55.611,lon:-2.794,sepa:'tweed',cat:'tweed',catchment:'Tweed',species:'Salmon, Sea trout, Grayling',icon:'🐟'},
-  {name:'River Helmsdale',lat:58.117,lon:-3.649,sepa:'helmsdale',cat:null,catchment:'Helmsdale',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Findhorn',lat:57.638,lon:-3.719,sepa:'findhorn',cat:null,catchment:'Findhorn',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Nith',lat:55.073,lon:-3.601,sepa:'nith',cat:null,catchment:'Nith',species:'Salmon, Sea trout, Grayling',icon:'🐟'},
-  {name:'River Clyde',lat:55.864,lon:-3.970,sepa:'clyde',cat:'clyde',catchment:'Clyde',species:'Salmon, Grayling, Brown trout',icon:'🐟'},
-  {name:'River Earn',lat:56.352,lon:-3.449,sepa:'earn',cat:'tay',catchment:'Earn',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Tummel',lat:56.718,lon:-3.781,sepa:'tay',cat:'tay',catchment:'Tummel',species:'Salmon, Brown trout',icon:'🐟'},
+  {name:'River Tay',lat:56.558,lon:-3.631,sepa:'tay',cat:'tay',catchment:'Upper Tay',species:'Salmon, Sea trout, Brown trout, Grayling, Pike',icon:'🐟'},
+  {name:'River Spey',lat:57.329,lon:-3.543,sepa:'spey',cat:'spey',catchment:'Speyside',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Dee (Aberdeenshire)',lat:57.066,lon:-2.502,sepa:'dee_ab',cat:'dee_ab',catchment:'Deeside',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Tweed',lat:55.611,lon:-2.794,sepa:'tweed',cat:'tweed',catchment:'Tweed',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Helmsdale',lat:58.117,lon:-3.649,sepa:'helmsdale',cat:null,catchment:'Helmsdale',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Findhorn',lat:57.638,lon:-3.719,sepa:'findhorn',cat:null,catchment:'Findhorn',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Nith',lat:55.073,lon:-3.601,sepa:'nith',cat:null,catchment:'Nith',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Clyde',lat:55.864,lon:-3.970,sepa:'clyde',cat:'clyde',catchment:'Clyde',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Earn',lat:56.352,lon:-3.449,sepa:'earn',cat:'tay',catchment:'Earn',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Tummel',lat:56.718,lon:-3.781,sepa:'tay',cat:'tay',catchment:'Tummel',species:'Salmon, Brown trout, Pike',icon:'🐟'},
   {name:'River Lyon',lat:56.600,lon:-4.003,sepa:'tay',cat:'tay',catchment:'Lyon',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Forth',lat:56.076,lon:-3.816,sepa:'clyde',cat:'clyde',catchment:'Forth',species:'Brown trout, Sea trout',icon:'🐟'},
-  {name:'River Allan',lat:56.176,lon:-3.838,sepa:'clyde',cat:'clyde',catchment:'Allan Water',species:'Brown trout, Grayling',icon:'🐟'},
-  {name:'River Esk (Angus)',lat:56.731,lon:-2.841,sepa:'dee_ab',cat:'dee_ab',catchment:'South Esk',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River North Esk',lat:56.832,lon:-2.480,sepa:'dee_ab',cat:'dee_ab',catchment:'North Esk',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Don (Aberdeenshire)',lat:57.258,lon:-2.200,sepa:'dee_ab',cat:'dee_ab',catchment:'Don',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Deveron',lat:57.541,lon:-2.732,sepa:'spey',cat:'spey',catchment:'Deveron',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Ness',lat:57.477,lon:-4.229,sepa:'spey',cat:'spey',catchment:'Ness',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Beauly',lat:57.484,lon:-4.458,sepa:'spey',cat:'spey',catchment:'Beauly',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Conon',lat:57.555,lon:-4.464,sepa:'spey',cat:'spey',catchment:'Conon',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Oykel',lat:58.002,lon:-4.622,sepa:'helmsdale',cat:null,catchment:'Oykel',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Shin',lat:57.904,lon:-4.467,sepa:'helmsdale',cat:null,catchment:'Shin',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Brora',lat:58.014,lon:-3.857,sepa:'helmsdale',cat:null,catchment:'Brora',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Thurso',lat:58.592,lon:-3.523,sepa:'helmsdale',cat:null,catchment:'Thurso',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Naver',lat:58.308,lon:-4.143,sepa:'helmsdale',cat:null,catchment:'Naver',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Halladale',lat:58.450,lon:-3.869,sepa:'helmsdale',cat:null,catchment:'Halladale',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Inver',lat:58.082,lon:-5.070,sepa:'spey',cat:'spey',catchment:'Inver',species:'Salmon, Sea trout',icon:'🐟'},
+  {name:'River Forth',lat:56.076,lon:-3.816,sepa:'clyde',cat:'clyde',catchment:'Forth',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Allan',lat:56.176,lon:-3.838,sepa:'clyde',cat:'clyde',catchment:'Allan Water',species:'Salmon, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Esk (Angus)',lat:56.731,lon:-2.841,sepa:'dee_ab',cat:'dee_ab',catchment:'South Esk',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River North Esk',lat:56.832,lon:-2.480,sepa:'dee_ab',cat:'dee_ab',catchment:'North Esk',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Don (Aberdeenshire)',lat:57.258,lon:-2.200,sepa:'dee_ab',cat:'dee_ab',catchment:'Don',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Deveron',lat:57.541,lon:-2.732,sepa:'spey',cat:'spey',catchment:'Deveron',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Ness',lat:57.477,lon:-4.229,sepa:'spey',cat:'spey',catchment:'Ness',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Beauly',lat:57.484,lon:-4.458,sepa:'spey',cat:'spey',catchment:'Beauly',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Conon',lat:57.555,lon:-4.464,sepa:'spey',cat:'spey',catchment:'Conon',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Oykel',lat:58.002,lon:-4.622,sepa:'helmsdale',cat:null,catchment:'Oykel',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Shin',lat:57.904,lon:-4.467,sepa:'helmsdale',cat:null,catchment:'Shin',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Brora',lat:58.014,lon:-3.857,sepa:'helmsdale',cat:null,catchment:'Brora',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Thurso',lat:58.592,lon:-3.523,sepa:'helmsdale',cat:null,catchment:'Thurso',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Naver',lat:58.308,lon:-4.143,sepa:'helmsdale',cat:null,catchment:'Naver',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Halladale',lat:58.450,lon:-3.869,sepa:'helmsdale',cat:null,catchment:'Halladale',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Inver',lat:58.082,lon:-5.070,sepa:'spey',cat:'spey',catchment:'Inver',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Broom',lat:57.898,lon:-5.133,sepa:'spey',cat:'spey',catchment:'Broom',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Ewe',lat:57.762,lon:-5.544,sepa:'spey',cat:'spey',catchment:'Ewe',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Shiel',lat:56.821,lon:-5.626,sepa:'spey',cat:'spey',catchment:'Shiel',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Lochy',lat:56.862,lon:-5.054,sepa:'spey',cat:'spey',catchment:'Lochy',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Awe',lat:56.395,lon:-5.219,sepa:'spey',cat:'spey',catchment:'Awe',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Ayr',lat:55.459,lon:-4.626,sepa:'nith',cat:null,catchment:'Ayr',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Doon',lat:55.388,lon:-4.625,sepa:'nith',cat:null,catchment:'Doon',species:'Salmon, Sea trout',icon:'🐟'},
+  {name:'River Ewe',lat:57.762,lon:-5.544,sepa:'spey',cat:'spey',catchment:'Ewe',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Shiel',lat:56.821,lon:-5.626,sepa:'spey',cat:'spey',catchment:'Shiel',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Lochy',lat:56.862,lon:-5.054,sepa:'spey',cat:'spey',catchment:'Lochy',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Awe',lat:56.395,lon:-5.219,sepa:'spey',cat:'spey',catchment:'Awe',species:'Salmon, Sea trout, Brown trout, Pike',icon:'🐟'},
+  {name:'River Ayr',lat:55.459,lon:-4.626,sepa:'nith',cat:null,catchment:'Ayr',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Doon',lat:55.388,lon:-4.625,sepa:'nith',cat:null,catchment:'Doon',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Girvan',lat:55.238,lon:-4.860,sepa:'nith',cat:null,catchment:'Girvan',species:'Salmon, Sea trout',icon:'🐟'},
   {name:'River Stinchar',lat:55.095,lon:-4.977,sepa:'nith',cat:null,catchment:'Stinchar',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Cree',lat:54.972,lon:-4.395,sepa:'nith',cat:null,catchment:'Cree',species:'Salmon, Sea trout',icon:'🐟'},
+  {name:'River Cree',lat:54.972,lon:-4.395,sepa:'nith',cat:null,catchment:'Cree',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Bladnoch',lat:54.844,lon:-4.422,sepa:'nith',cat:null,catchment:'Bladnoch',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Ken',lat:55.023,lon:-4.048,sepa:'nith',cat:null,catchment:'Ken-Dee',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Dee (Galloway)',lat:54.863,lon:-4.062,sepa:'nith',cat:null,catchment:'Galloway Dee',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Annan',lat:55.008,lon:-3.258,sepa:'annan',cat:'annan',catchment:'Annan',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'Water of Luce',lat:54.875,lon:-4.830,sepa:'nith',cat:null,catchment:'Luce',species:'Sea trout, Brown trout',icon:'🐟'},
-  {name:'River Lossie',lat:57.711,lon:-3.314,sepa:'findhorn',cat:null,catchment:'Lossie',species:'Salmon, Brown trout',icon:'🐟'},
+  {name:'River Ken',lat:55.023,lon:-4.048,sepa:'nith',cat:null,catchment:'Ken-Dee',species:'Salmon, Brown trout, Pike',icon:'🐟'},
+  {name:'River Dee (Galloway)',lat:54.863,lon:-4.062,sepa:'nith',cat:null,catchment:'Galloway Dee',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Annan',lat:55.008,lon:-3.258,sepa:'annan',cat:'annan',catchment:'Annan',species:'Salmon, Sea trout, Brown trout, Grayling',icon:'🐟'},
+  {name:'Water of Luce',lat:54.875,lon:-4.830,sepa:'nith',cat:null,catchment:'Luce',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Lossie',lat:57.711,lon:-3.314,sepa:'findhorn',cat:null,catchment:'Lossie',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Nairn',lat:57.584,lon:-3.875,sepa:'findhorn',cat:null,catchment:'Nairn',species:'Salmon, Brown trout',icon:'🐟'},
-  {name:'River Braan',lat:56.558,lon:-3.741,sepa:'tay',cat:'tay',catchment:'Braan',species:'Brown trout, Salmon',icon:'🐟'},
-  {name:'River Almond (Perth)',lat:56.417,lon:-3.481,sepa:'tay',cat:'tay',catchment:'Almond',species:'Brown trout, Grayling',icon:'🐟'},
-  {name:'River Etive',lat:56.531,lon:-5.106,sepa:'spey',cat:'spey',catchment:'Etive',species:'Salmon, Sea trout',icon:'🐟'},
+  {name:'River Braan',lat:56.558,lon:-3.741,sepa:'tay',cat:'tay',catchment:'Braan',species:'Salmon, Brown trout',icon:'🐟'},
+  {name:'River Almond (Perth)',lat:56.417,lon:-3.481,sepa:'tay',cat:'tay',catchment:'Almond',species:'Salmon, Brown trout, Grayling',icon:'🐟'},
+  {name:'River Etive',lat:56.531,lon:-5.106,sepa:'spey',cat:'spey',catchment:'Etive',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Spean',lat:56.891,lon:-4.894,sepa:'spey',cat:'spey',catchment:'Spean',species:'Salmon, Brown trout',icon:'🐟'},
   {name:'River Carron (Ross-shire)',lat:57.769,lon:-4.434,sepa:'spey',cat:'spey',catchment:'Carron',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Kerry',lat:57.702,lon:-5.636,sepa:'spey',cat:'spey',catchment:'Kerry',species:'Salmon, Sea trout',icon:'🐟'},
-  {name:'River Fleet (Sutherland)',lat:57.977,lon:-4.029,sepa:'helmsdale',cat:null,catchment:'Fleet',species:'Salmon, Sea trout',icon:'🐟'},
+  {name:'River Kerry',lat:57.702,lon:-5.636,sepa:'spey',cat:'spey',catchment:'Kerry',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Fleet (Sutherland)',lat:57.977,lon:-4.029,sepa:'helmsdale',cat:null,catchment:'Fleet',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Dionard',lat:58.541,lon:-4.771,sepa:'helmsdale',cat:null,catchment:'Dionard',species:'Salmon, Sea trout',icon:'🐟'},
   {name:'River Wick',lat:58.447,lon:-3.093,sepa:'helmsdale',cat:null,catchment:'Wick',species:'Sea trout, Brown trout',icon:'🐟'},
-  {name:'River Urr',lat:54.948,lon:-3.836,sepa:'tweed',cat:'tweed',catchment:'Urr',species:'Sea trout, Brown trout',icon:'🐟'},
+  {name:'River Urr',lat:54.948,lon:-3.836,sepa:'tweed',cat:'tweed',catchment:'Urr',species:'Salmon, Sea trout, Brown trout',icon:'🐟'},
   {name:'River Ythan',lat:57.310,lon:-2.027,sepa:'dee_ab',cat:'dee_ab',catchment:'Ythan',species:'Sea trout, Brown trout',icon:'🐟'},
   {name:'River Alness',lat:57.687,lon:-4.256,sepa:'spey',cat:'spey',catchment:'Alness',species:'Salmon, Sea trout',icon:'🐟'},
   {name:'River Devon (Clackmannan)',lat:56.163,lon:-3.783,sepa:'clyde',cat:'clyde',catchment:'Devon',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'Water of Leith',lat:55.945,lon:-3.220,sepa:'leith',cat:null,catchment:'Almond Group',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'Water of Leith (Colinton)',lat:55.907,lon:-3.253,sepa:'leith',cat:null,catchment:'Almond Group',species:'Brown trout, Grayling',icon:'🐟'},
-  {name:'River Kelvin',lat:55.880,lon:-4.280,sepa:'clyde',cat:'clyde',catchment:'Kelvin',species:'Brown trout, Grayling',icon:'🐟'},
+  {name:'River Kelvin',lat:55.880,lon:-4.280,sepa:'clyde',cat:'clyde',catchment:'Kelvin',species:'Brown trout, Grayling, Salmon',icon:'🐟'},
   {name:'River Almond (Lothian)',lat:55.957,lon:-3.452,sepa:'leith',cat:null,catchment:'Almond Group',species:'Brown trout, Sea trout',icon:'🐟'},
   {name:'Lyne Water',lat:55.640,lon:-3.250,sepa:'lyne',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'Ettrick Water',lat:55.548,lon:-2.933,sepa:'ettrick',cat:null,catchment:'Tweed tributary',species:'Brown trout, Sea trout',icon:'🐟'},
@@ -1758,7 +1758,45 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
   <a href="https://maps.apple.com/?ll=${gaugeMapLat},${gaugeMapLon}&q=${gaugeLabel}" class="map-a" target="_blank">🗺 Apple Maps</a>
 </div>
 <div class="lbl">Species on ${river.name}</div>
-${buildSpeciesCards(river,waterTemp)}
+${(()=>{
+  try {
+    const _month=new Date().getMonth()+1;
+    const _spMap={
+      'salmon':'atlantic_salmon','atlantic salmon':'atlantic_salmon',
+      'sea trout':'sea_trout','sea-trout':'sea_trout',
+      'brown trout':'brown_trout','brown-trout':'brown_trout','wild brown trout':'brown_trout',
+      'grayling':'grayling','rainbow trout':'rainbow_trout','pike':'pike'
+    };
+    const _riverSpecies=(river.species||'').split(',').map(s=>s.trim()).filter(s=>s&&s!=='—');
+    if(!_riverSpecies.length) return '<div style="font-size:12px;color:var(--text3)">No species data.</div>';
+    return _riverSpecies.map(sp=>{
+      const key=_spMap[sp.toLowerCase()];
+      const sd=key?SPECIES_DATA[key]:null;
+      if(!sd)return'';
+      const inSeason=[2,3,4,5,6,7,8,9,10].includes(_month)&&key==='atlantic_salmon'||
+        [5,6,7,8,9].includes(_month)&&key==='sea_trout'||
+        [3,4,5,6,7,8,9,10].includes(_month)&&key==='brown_trout'||
+        [10,11,12,1,2].includes(_month)&&key==='grayling'||
+        key==='rainbow_trout'||
+        [10,11,12,1,2,3].includes(_month)&&key==='pike';
+      const seasonBadge=inSeason
+        ?'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(74,158,106,.15);border:1px solid rgba(74,158,106,.3);color:var(--al)">In season</span>'
+        :'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--text3)">Out of season</span>';
+      const sid='sp-'+key+'-'+river.name.replace(/[^a-z0-9]/gi,'');
+      const tacticRows=sd.tactics.map(t=>'<div class="tr2"><span class="tk">'+t.k+'</span><span class="tv" style="max-width:60%;text-align:right;font-size:11px">'+t.v+'</span></div>').join('');
+      return '<div style="border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:7px">'
+        +'<div onclick="document.getElementById(\''+sid+'\').style.display=document.getElementById(\''+sid+'\').style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.sp-arr\').textContent=document.getElementById(\''+sid+'\').style.display===\'none\'?\'▼\':\'▲\'" style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:var(--surface)">'
+        +'<div style="display:flex;align-items:center;gap:9px">'
+        +'<div style="width:10px;height:10px;border-radius:50%;background:'+sd.color+';flex-shrink:0"></div>'
+        +'<span style="font-size:13px;font-weight:500;color:var(--text)">'+sd.name+'</span> '+seasonBadge
+        +'</div><span class="sp-arr" style="font-size:11px;color:var(--text3)">▼</span></div>'
+        +'<div id="'+sid+'" style="display:none;padding:11px 13px;border-top:1px solid var(--border);background:var(--bg2)">'
+        +'<div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">'+sd.desc+'</div>'
+        +'<div style="font-size:10px;color:var(--text3);margin-bottom:7px">Season: '+sd.season+' · Best months: '+sd.bestMonths+'</div>'
+        +tacticRows+'</div></div>';
+    }).join('');
+  } catch(e) { return '<div style="font-size:12px;color:var(--redl)">Species error: '+e.message+'</div>'; }
+})()} 
 <div class="lbl">Log a catch here</div>
 <button class="bp" onclick='quickLog(${JSON.stringify({name:river.name,lat,lon,sepa:river.sepa||null})})'>+ Log catch at ${river.name}</button>
 <div style="height:10px"></div>`;}
