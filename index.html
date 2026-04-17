@@ -424,7 +424,7 @@ const CACHE_WARN_MS  = 6  * 3600 * 1000;
 const CACHE_STALE_MS = 24 * 3600 * 1000;
 
 function _cacheKey(lat, lon) {
-  return `g_cache_${parseFloat(lat).toFixed(2)}_${parseFloat(lon).toFixed(2)}`;
+  return `g_cache_v2_${parseFloat(lat).toFixed(2)}_${parseFloat(lon).toFixed(2)}`;
 }
 
 function writeConditionsCache(lat, lon, wx, fc, rv) {
@@ -822,6 +822,7 @@ function refreshHereView(){
   const cond=scoreNow(wx?.current,rv,st?.nMax,p6h);
   document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,lat,lon,alerts,wx?.hourly,fc,null);
   renderForecast(fc,alerts,st?.lag||18);
+  renderRiverTab(rv,river,st);
   if(curHTab==='river'&&rv)setTimeout(()=>drawRiverGraph(rv),80);
 }
 
@@ -854,39 +855,52 @@ function pTrend6h(delta,abs){
 function lvStat(lv,nMax,trend){
   const nm=nMax||3;
   if(lv===null||lv===undefined)return{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
+  lv=parseFloat(lv); // ensure numeric — never a string
+  if(isNaN(lv))return{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
   const pct=lv/nm;
   const barPct=Math.min(99,Math.round(pct*90));
+
+  // Absolute wading ceiling — above 0.8m wading is not possible on any river
+  const absNoWade = lv>=0.8;  // >= so 0.8m itself is included
+  const absCareful = lv>=0.5 && lv<0.8;
+
+  // Helper: override wade note based on absolute depth
+  function wadeMsg(percentageMsg){
+    if(absNoWade) return 'Wading not possible at this level. Bank fishing only.';
+    if(absCareful) return 'Careful wading only — maximum safe depth. Take a wading staff.';
+    return percentageMsg;
+  }
 
   // >100% — danger
   if(pct>1.0)return{text:'Danger — do not fish',cls:'bn',pct:99,col:'var(--red)',
     wade:'⚠️ Danger to life — do not enter the water. Check with local ghillies.'};
   // 80–100% — flood
   if(pct>0.8)return{text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',
-    wade:'River running high and likely dirty. Do not wade. Check with local ghillies.'};
+    wade:wadeMsg('River running high and likely dirty. Do not wade. Check with local ghillies.')};
   // 60–80% — too high
   if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',
-    wade:'Wading is dangerous at this level. Stay on the bank.'};
+    wade:wadeMsg('Wading not possible at this level. Bank fishing only.')};
   // 35–60% — depends on trend
   if(pct>0.35){
     if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',
-      wade:'River rising — wading dangerous and conditions worsening.'};
+      wade:wadeMsg('River rising — wading dangerous and conditions worsening.')};
     if(trend==='falling')return{text:'Falling — improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
-      wade:'River on the high side but falling. Careful approach — conditions improving.'};
+      wade:wadeMsg('River on the high side but falling. Careful approach — conditions improving.')};
     return{text:'High — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
-      wade:'River running high. Careful wading only — take a wading staff.'};
+      wade:wadeMsg('River running high. Careful wading only — take a wading staff.')};
   }
   // 10–35% — ideal band
   if(pct>0.10){
     if(trend==='rising')return{text:'Rising — watch closely',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',
-      wade:'Good level now but rising. Monitor closely and be ready to leave.'};
+      wade:wadeMsg('Good level now but rising. Monitor closely and be ready to leave.')};
     if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
-      wade:'Perfect wading level and falling. Fish are likely active — prime time.'};
+      wade:wadeMsg('Perfect wading level and falling. Fish are likely active — prime time.')};
     return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
-      wade:'Good wading conditions. Safe to fish.'};
+      wade:wadeMsg('Good wading conditions. Safe to fish.')};
   }
   // <10% — very low
   return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',
-    wade:'Very low and clear. Fish are wary — use a small fly and fine tippet.'};
+    wade:wadeMsg('Very low and clear. Fish are wary — use a small fly and fine tippet.')};
 }function tClass(t){return t==='falling'?'t-d':t==='rising'?'t-u':'t-s';}
 function tArr(t){return t==='falling'?'▼':t==='rising'?'▲':'—';}
 function scoreNow(w,r,nMax,pressureTrend6h){
@@ -1294,8 +1308,12 @@ async function loadConditionsForCoords(lat,lon,pn){
 /* Load full conditions for a specific SEPA gauge object */
 async function loadConditionsForGauge(g, userLat, userLon, pn){
   const glat=g.glat||userLat, glon=g.glon||userLon;
-  document.getElementById('here-title').textContent=g.label;
-  document.getElementById('here-sub').textContent=(pn&&pn!==g.label?'Near '+pn+' · ':'')+'SEPA gauge';
+  // Find river name for the header — gauge name goes in the subtitle
+  const headerRiver=RIVERS.find(r=>r.name===g.river)||
+    RIVERS.find(r=>g.river.includes(r.name.replace('River ','').replace('Water of ','')));
+  const headerName=headerRiver?.name||g.river||g.label;
+  document.getElementById('here-title').textContent=headerName;
+  document.getElementById('here-sub').textContent=(pn&&pn!==headerName?'Near '+pn+' · ':'')+g.label+' · SEPA gauge';
   setLoadingNow('Loading '+g.label+'...');
   document.getElementById('here-forecast').innerHTML='';document.getElementById('here-river').innerHTML='';
   curHTab='now';switchHTab('now');
@@ -1557,6 +1575,10 @@ function openCatchPicker(catKey,riverName){
 }
 async function loadCatchGauge(catKey,idx){
   const cat=CATCHMENTS[catKey][idx];
+  // Keep river name in header — only update subtitle with new gauge
+  const riverName=hereData.river?.name||document.getElementById('here-title').textContent;
+  document.getElementById('here-title').textContent=riverName;
+  document.getElementById('here-sub').textContent=cat.label+' · SEPA gauge';
   document.getElementById('here-now').innerHTML=`<div class="lw"><div class="spinner"></div><p style="font-size:12px;color:var(--text3)">Loading ${cat.label}...</p></div>`;
   switchHTab('now');
   const newSt={stId:cat.stId,gauge:cat.label,nMax:cat.nMax,
@@ -1757,29 +1779,91 @@ function drawPressureGraph(daily){
 /* RIVER GRAPH */
 function renderRiverTab(rv,river,st){
   const el=document.getElementById('here-river');el.innerHTML='';
-  if(!rv||!rv.history||rv.history.length<2){el.innerHTML=`<div class="scroll" style="display:flex;flex-direction:column;gap:11px;flex:1"><div class="lbl">${st?.gauge||river.name}</div><div class="card"><div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">Live graph unavailable</div><div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:10px">SEPA data could not be loaded via proxy. Use the official link below for live charts.</div>${sepaLink(st)}</div>${lvGuide()}<div style="height:10px"></div></div>`;return;}
-  el.innerHTML=`<div class="scroll" style="display:flex;flex-direction:column;gap:11px;flex:1"><div class="lbl">${rv.gauge||river.name} — 48h level</div><div class="gw"><canvas id="river-canvas" class="gc" height="150"></canvas><div class="gl" id="rlabels"></div><div style="display:flex;gap:12px;margin-top:7px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Height (m)</div><div style="margin-left:auto;font-size:10px;color:var(--text3)">Now: ${rv.level.toFixed(2)}m · ${rv.trend}</div></div></div>${sepaLink(st)}${lvGuide()}<div style="height:10px"></div></div>`;
+  const catKey=river.cat||st?.catKey||null;
+  const catchStations=catKey&&CATCHMENTS[catKey]?CATCHMENTS[catKey]:[];
+
+  if(!rv||!rv.history||rv.history.length<2){
+    const noDataHTML=`<div class="card"><div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">Live graph unavailable</div><div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:10px">SEPA data could not be loaded. Use the official link below.</div>${sepaLink(st)}</div>`;
+    el.innerHTML=`<div class="scroll" style="display:flex;flex-direction:column;gap:11px;flex:1"><div class="lbl">${st?.gauge||river.name}</div>${noDataHTML}${catchStations.length>1?'<div id="catchment-snapshot"></div>':''}<div style="height:10px"></div></div>`;
+    if(catchStations.length>1)loadCatchmentSnapshot(catchStations,river,st);
+    return;
+  }
+
+  const unitLabel=useMetric?'m':'ft';
+  el.innerHTML=`<div class="scroll" style="display:flex;flex-direction:column;gap:11px;flex:1">
+<div class="lbl">${rv.gauge||river.name} — 48h level</div>
+<div class="gw">
+  <canvas id="river-canvas" class="gc" height="150"></canvas>
+  <div class="gl" id="rlabels"></div>
+  <div style="display:flex;gap:12px;margin-top:7px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Height (${unitLabel})</div>
+    <div style="margin-left:auto;font-size:10px;color:var(--text3)">Now: ${fmtLevel(rv.level)} · ${rv.trend}</div>
+  </div>
+</div>
+${sepaLink(st)}${lvGuide()}
+${catchStations.length>1?`<div class="lbl" style="margin-top:3px">All stations on ${river.name}</div><div id="catchment-snapshot"><div class="lw" style="padding:20px 0"><div class="spinner"></div></div></div>`:''}
+<div style="height:10px"></div></div>`;
+
   setTimeout(()=>drawRiverGraph(rv),80);
+  if(catchStations.length>1)loadCatchmentSnapshot(catchStations,river,st);
 }
 
 function drawRiverGraph(rv){
   const canvas=document.getElementById('river-canvas');if(!canvas)return;
   const hist=rv.history;if(!hist||hist.length<2)return;
+  // Convert to display units
+  const conv=useMetric?v=>v:v=>v*3.281;
+  const dispHist=hist.map(conv);
+  const dispNm=conv(rv.nMax||3);
   const dpr=window.devicePixelRatio||1,W=canvas.offsetWidth||320,H=150;
   canvas.width=W*dpr;canvas.height=H*dpr;canvas.style.width=W+'px';canvas.style.height=H+'px';
   const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
-  const pad={t:14,r:10,b:26,l:44},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
-  const mn=Math.max(0,Math.min(...hist)*0.92),mx=Math.max(...hist)*1.08,rng=(mx-mn)||0.1;
-  const nm=rv.nMax||3;
-  const toX=i=>pad.l+(i/(hist.length-1))*cw,toY=v=>pad.t+ch-(((v-mn)/rng)*ch);
+  const pad={t:14,r:10,b:26,l:46},cw=W-pad.l-pad.r,ch=H-pad.t-pad.b;
+  const mn=Math.max(0,Math.min(...dispHist)*0.92),mx=Math.max(...dispHist)*1.08,rng=(mx-mn)||0.1;
+  const toX=i=>pad.l+(i/(dispHist.length-1))*cw,toY=v=>pad.t+ch-(((v-mn)/rng)*ch);
   ctx.clearRect(0,0,W,H);
-  [{v:nm*1.2,top:mx+1,col:'rgba(201,64,64,.07)'},{v:nm,top:nm*1.2,col:'rgba(200,146,42,.06)'},{v:mn,top:nm,col:'rgba(74,158,106,.05)'}].forEach(z=>{const y1=Math.max(pad.t,toY(Math.min(z.top,mx+0.1))),y2=Math.min(pad.t+ch,toY(z.v));if(y2>y1){ctx.fillStyle=z.col;ctx.fillRect(pad.l,y1,cw,y2-y1);}});
-  for(let i=0;i<=4;i++){const v=mn+(rng/4)*i,y=toY(v);ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();ctx.fillStyle='rgba(90,112,96,.85)';ctx.font='10px DM Sans,sans-serif';ctx.textAlign='right';ctx.fillText(v.toFixed(2)+'m',pad.l-3,y+4);}
-  if(nm>=mn&&nm<=mx){const ny=toY(nm);ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(200,146,42,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,ny);ctx.lineTo(pad.l+cw,ny);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(200,146,42,.7)';ctx.font='9px DM Sans,sans-serif';ctx.textAlign='left';ctx.fillText('Normal max',pad.l+3,ny-3);}
-  ctx.beginPath();ctx.moveTo(toX(0),toY(hist[0]));hist.forEach((v,i)=>{if(i>0)ctx.lineTo(toX(i),toY(v));});ctx.lineTo(toX(hist.length-1),pad.t+ch);ctx.lineTo(pad.l,pad.t+ch);ctx.closePath();ctx.fillStyle='rgba(74,158,106,.13)';ctx.fill();
-  ctx.beginPath();ctx.moveTo(toX(0),toY(hist[0]));hist.forEach((v,i)=>{if(i>0)ctx.lineTo(toX(i),toY(v));});ctx.strokeStyle='#4a9e6a';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
-  const lx=toX(hist.length-1),ly=toY(hist[hist.length-1]);ctx.beginPath();ctx.arc(lx,ly,5,0,Math.PI*2);ctx.fillStyle='#7dc49a';ctx.fill();
+  [{v:dispNm*1.2,top:mx+1,col:'rgba(201,64,64,.07)'},{v:dispNm,top:dispNm*1.2,col:'rgba(200,146,42,.06)'},{v:mn,top:dispNm,col:'rgba(74,158,106,.05)'}].forEach(z=>{const y1=Math.max(pad.t,toY(Math.min(z.top,mx+0.1))),y2=Math.min(pad.t+ch,toY(z.v));if(y2>y1){ctx.fillStyle=z.col;ctx.fillRect(pad.l,y1,cw,y2-y1);}});
+  const unitSuffix=useMetric?'m':'ft';
+  const decimals=useMetric?2:1;
+  for(let i=0;i<=4;i++){const v=mn+(rng/4)*i,y=toY(v);ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(pad.l+cw,y);ctx.stroke();ctx.fillStyle='rgba(90,112,96,.85)';ctx.font='10px DM Sans,sans-serif';ctx.textAlign='right';ctx.fillText(v.toFixed(decimals)+unitSuffix,pad.l-3,y+4);}
+  if(dispNm>=mn&&dispNm<=mx){const ny=toY(dispNm);ctx.setLineDash([4,4]);ctx.strokeStyle='rgba(200,146,42,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,ny);ctx.lineTo(pad.l+cw,ny);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(200,146,42,.7)';ctx.font='9px DM Sans,sans-serif';ctx.textAlign='left';ctx.fillText('Normal max',pad.l+3,ny-3);}
+  ctx.beginPath();ctx.moveTo(toX(0),toY(dispHist[0]));dispHist.forEach((v,i)=>{if(i>0)ctx.lineTo(toX(i),toY(v));});ctx.lineTo(toX(dispHist.length-1),pad.t+ch);ctx.lineTo(pad.l,pad.t+ch);ctx.closePath();ctx.fillStyle='rgba(74,158,106,.13)';ctx.fill();
+  ctx.beginPath();ctx.moveTo(toX(0),toY(dispHist[0]));dispHist.forEach((v,i)=>{if(i>0)ctx.lineTo(toX(i),toY(v));});ctx.strokeStyle='#4a9e6a';ctx.lineWidth=2;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+  const lx=toX(dispHist.length-1),ly=toY(dispHist[dispHist.length-1]);ctx.beginPath();ctx.arc(lx,ly,5,0,Math.PI*2);ctx.fillStyle='#7dc49a';ctx.fill();
   const lblEl=document.getElementById('rlabels');if(lblEl&&rv.timestamps&&rv.timestamps.length>0){const step=Math.max(1,Math.floor(hist.length/5)),lbls=[];for(let i=0;i<hist.length;i+=step){const ts=rv.timestamps[i];if(ts){const x=new Date(ts);lbls.push(`${x.getDate()}/${x.getMonth()+1} ${String(x.getHours()).padStart(2,'0')}h`);}}lblEl.innerHTML=lbls.map(l=>`<span class="gll">${l}</span>`).join('');}
+}
+
+async function loadCatchmentSnapshot(stations,river,currentSt){
+  const el=document.getElementById('catchment-snapshot');if(!el)return;
+  // Fetch all stations with tsIds in parallel, show results as they come in
+  const results=await Promise.allSettled(
+    stations.map(s=>s.tsId
+      ? fetchSEPAById(s.tsId,s.stId,s.label,s.nMax).then(rv=>({s,rv}))
+      : Promise.resolve({s,rv:null}))
+  );
+  if(!document.getElementById('catchment-snapshot'))return; // user navigated away
+  const rows=results.map(r=>{
+    const {s,rv}=r.status==='fulfilled'?r.value:{s:r.reason?.s,rv:null};
+    if(!s)return'';
+    const isCurrent=s.stId===currentSt?.stId;
+    const trendIcon=rv?.trend==='rising'?'▲':rv?.trend==='falling'?'▼':'→';
+    const trendCol=rv?.trend==='rising'?'var(--redl)':rv?.trend==='falling'?'var(--al)':'var(--ambl)';
+    const ls=rv?lvStat(rv.level,s.nMax,rv.trend):null;
+    const levelTxt=rv?fmtLevel(rv.level):'—';
+    const pctTxt=rv?Math.round((rv.level/s.nMax)*100)+'%':'—';
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:${isCurrent?'rgba(74,158,106,.08)':'var(--surface)'};border:1px solid ${isCurrent?'rgba(74,158,106,.3)':'var(--border)'};border-radius:var(--rs);gap:10px">
+  <div style="flex:1;min-width:0">
+    <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isCurrent?'◉ ':''} ${s.label}</div>
+    ${rv?`<div style="font-size:10px;color:var(--text3);margin-top:2px">nMax ${fmtNMax(s.nMax)} · ${pctTxt} of normal</div>`:'<div style="font-size:10px;color:var(--text3);margin-top:2px">No live data</div>'}
+  </div>
+  <div style="text-align:right;flex-shrink:0">
+    ${rv?`<div style="font-size:15px;font-weight:500;font-family:var(--fd);color:var(--text)">${levelTxt} <span style="font-size:13px;color:${trendCol}">${trendIcon}</span></div>
+    <div style="margin-top:3px"><span class="badge ${ls.cls}" style="font-size:9px;padding:1px 6px">${ls.text}</span></div>`
+    :`<a href="https://waterlevels.sepa.org.uk/Station/${s.stId}" target="_blank" style="font-size:10px;color:var(--al)">SEPA ↗</a>`}
+  </div>
+</div>`;
+  }).join('');
+  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${rows}</div>`;
 }
 
 /* RIVERS VIEW */
