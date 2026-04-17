@@ -178,14 +178,24 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 </head>
 <body>
 <div class="app" id="app">
-<div class="sb"><span id="clock">9:41</span>
+<div class="sb">
+  <span id="clock">9:41</span>
   <div class="units-toggle" id="units-toggle" data-metric="1" onclick="setUnits(this.dataset.metric!=='1')">
     <span class="ut-m" style="font-weight:600">°C</span>
     <div class="ut-track"><div class="ut-knob"></div></div>
     <span class="ut-i">°F</span>
   </div>
-  <button onclick="shareApp()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1" title="Share Ghillie">⬆</button>
-<span>GPS</span></div>
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px">
+    <span>GPS</span>
+    <button onclick="shareApp()" title="Share Ghillie" style="background:none;border:none;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;width:22px;height:16px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+        <polyline points="16 6 12 2 8 6"/>
+        <line x1="12" y1="2" x2="12" y2="15"/>
+      </svg>
+    </button>
+  </div>
+</div>
 <div class="offline-bar" id="offline-bar">
   <span id="offline-msg">📵 Offline — showing cached data</span>
   <span id="offline-age" style="font-size:10px;opacity:.8"></span>
@@ -1450,6 +1460,8 @@ async function loadConditionsForCoords(lat,lon,pn){
 
 /* Load full conditions for a specific SEPA gauge object */
 async function loadConditionsForGauge(g, userLat, userLon, pn){
+  // Remember this gauge for this river so next visit restores it
+  if(g.river) localStorage.setItem(`g_gauge_${g.river}`, JSON.stringify({stId:g.stId,label:g.label}));
   const glat=g.glat||userLat, glon=g.glon||userLon;
   // Find river name for the header — gauge name goes in the subtitle
   const headerRiver=RIVERS.find(r=>r.name===g.river)||
@@ -1552,7 +1564,20 @@ async function selectNearbyGauge(idx){
 
 async function loadConditionsForRiver(idx,userLat,userLon,pn){
   const river=RIVERS[idx];
-  const shortName=river.name.replace('River ','').replace('Water of ','').split(' ')[0]; // e.g. "Tay", "Clyde"
+  const shortName=river.name.replace('River ','').replace('Water of ','').split(' ')[0];
+
+  // Check if user has previously chosen a specific gauge for this river
+  const savedGauge=localStorage.getItem(`g_gauge_${river.name}`);
+  if(savedGauge){
+    try{
+      const {stId}=JSON.parse(savedGauge);
+      const match=ALL_GAUGES.find(g=>g.stId===stId);
+      if(match){
+        await loadConditionsForGauge(match,userLat,userLon,pn||river.name);
+        return;
+      }
+    }catch(e){}
+  }
 
   // Split ALL_GAUGES into three tiers:
   // 1. Exact river name AND label starts with river short name (e.g. "Tay at Caputh" for River Tay)
@@ -1754,8 +1779,9 @@ function openCatchPicker(catKey,riverName){
 }
 async function loadCatchGauge(catKey,idx){
   const cat=CATCHMENTS[catKey][idx];
-  // Keep river name in header — only update subtitle with new gauge
   const riverName=hereData.river?.name||document.getElementById('here-title').textContent;
+  // Remember this gauge choice for next visit
+  if(riverName) localStorage.setItem(`g_gauge_${riverName}`, JSON.stringify({stId:cat.stId,label:cat.label}));
   document.getElementById('here-title').textContent=riverName;
   document.getElementById('here-sub').textContent=cat.label+' · SEPA gauge';
   document.getElementById('here-now').innerHTML=`<div class="lw"><div class="spinner"></div><p style="font-size:12px;color:var(--text3)">Loading ${cat.label}...</p></div>`;
