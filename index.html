@@ -855,52 +855,61 @@ function pTrend6h(delta,abs){
 function lvStat(lv,nMax,trend){
   const nm=nMax||3;
   if(lv===null||lv===undefined)return{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
-  lv=parseFloat(lv); // ensure numeric — never a string
+  lv=parseFloat(lv);
   if(isNaN(lv))return{text:'No data',cls:'bc',pct:0,col:'var(--text3)',wade:''};
   const pct=lv/nm;
   const barPct=Math.min(99,Math.round(pct*90));
 
-  // Absolute wading ceiling — above 0.8m wading is not possible on any river
-  const absNoWade = lv>=0.8;  // >= so 0.8m itself is included
+  // Absolute wading ceiling — overrides badge text too, not just the wade note
+  const absNoWade  = lv>=0.8;
   const absCareful = lv>=0.5 && lv<0.8;
 
-  // Helper: override wade note based on absolute depth
   function wadeMsg(percentageMsg){
-    if(absNoWade) return 'Wading not possible at this level. Bank fishing only.';
+    if(absNoWade)  return 'Wading not possible at this level. Bank fishing only.';
     if(absCareful) return 'Careful wading only — maximum safe depth. Take a wading staff.';
     return percentageMsg;
+  }
+  // When absolute depth overrides, also correct the badge text/colour
+  function absOverride(result){
+    if(absNoWade && result.cls!=='bn'){
+      return{...result,text:'No wading — bank only',cls:'bn',col:'var(--red)',wade:wadeMsg(result.wade)};
+    }
+    if(absCareful && result.cls==='bg'){
+      return{...result,text:'Careful wading only',cls:'bc',col:'var(--amber)',wade:wadeMsg(result.wade)};
+    }
+    return{...result,wade:wadeMsg(result.wade)};
   }
 
   // >100% — danger
   if(pct>1.0)return{text:'Danger — do not fish',cls:'bn',pct:99,col:'var(--red)',
     wade:'⚠️ Danger to life — do not enter the water. Check with local ghillies.'};
   // 80–100% — flood
-  if(pct>0.8)return{text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',
-    wade:wadeMsg('River running high and likely dirty. Do not wade. Check with local ghillies.')};
+  if(pct>0.8)return absOverride({text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',
+    wade:'River running high and likely dirty. Do not wade. Check with local ghillies.'});
   // 60–80% — too high
-  if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',
-    wade:wadeMsg('Wading not possible at this level. Bank fishing only.')};
+  if(pct>0.6)return absOverride({text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',
+    wade:'Wading not possible at this level. Bank fishing only.'});
   // 35–60% — depends on trend
   if(pct>0.35){
-    if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',
-      wade:wadeMsg('River rising — wading dangerous and conditions worsening.')};
-    if(trend==='falling')return{text:'Falling — improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
-      wade:wadeMsg('River on the high side but falling. Careful approach — conditions improving.')};
-    return{text:'High — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
-      wade:wadeMsg('River running high. Careful wading only — take a wading staff.')};
+    if(trend==='rising')return absOverride({text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',
+      wade:'River rising — wading dangerous and conditions worsening.'});
+    if(trend==='falling')return absOverride({text:'Falling — improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
+      wade:'River on the high side but falling. Careful approach — conditions improving.'});
+    return absOverride({text:'High — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
+      wade:'River running high. Careful wading only — take a wading staff.'});
   }
   // 10–35% — ideal band
   if(pct>0.10){
-    if(trend==='rising')return{text:'Rising — watch closely',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',
-      wade:wadeMsg('Good level now but rising. Monitor closely and be ready to leave.')};
-    if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
-      wade:wadeMsg('Perfect wading level and falling. Fish are likely active — prime time.')};
-    return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
-      wade:wadeMsg('Good wading conditions. Safe to fish.')};
+    if(trend==='rising')return absOverride({text:'Rising — watch closely',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',
+      wade:'Good level now but rising. Monitor closely and be ready to leave.'});
+    if(trend==='falling')return absOverride({text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
+      wade:'Perfect wading level and falling. Fish are likely active — prime time.'});
+    return absOverride({text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
+      wade:'Good wading conditions. Safe to fish.'});
   }
   // <10% — very low
-  return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',
-    wade:wadeMsg('Very low and clear. Fish are wary — use a small fly and fine tippet.')};
+  return absOverride({text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',
+    wade:'Very low and clear. Fish are wary — use a small fly and fine tippet.'});
 }function tClass(t){return t==='falling'?'t-d':t==='rising'?'t-u':'t-s';}
 function tArr(t){return t==='falling'?'▼':t==='rising'?'▲':'—';}
 function scoreNow(w,r,nMax,pressureTrend6h){
@@ -1409,13 +1418,19 @@ async function selectNearbyGauge(idx){
 
 async function loadConditionsForRiver(idx,userLat,userLon,pn){
   const river=RIVERS[idx];
-  // Gauge matching: exact river name first, then same catchment key — prevents
-  // e.g. Kelvin gauge appearing for River Clyde, or Tummel for River Tay.
-  const exactGauges=ALL_GAUGES.filter(g=>g.river===river.name);
-  const catchGauges=ALL_GAUGES.filter(g=>g.river!==river.name&&g.sepaKey===river.sepa);
-  // Sort each group by distance; prefer exact matches over catchment fallbacks
+  const shortName=river.name.replace('River ','').replace('Water of ','').split(' ')[0]; // e.g. "Tay", "Clyde"
+
+  // Split ALL_GAUGES into three tiers:
+  // 1. Exact river name AND label starts with river short name (e.g. "Tay at Caputh" for River Tay)
+  // 2. Exact river name but label is a tributary (e.g. "Tummel at Pitlochry" registered under River Tay)
+  // 3. Same catchment key but different river name (fallback)
+  const tier1=ALL_GAUGES.filter(g=>g.river===river.name&&g.label.toLowerCase().startsWith(shortName.toLowerCase()));
+  const tier2=ALL_GAUGES.filter(g=>g.river===river.name&&!g.label.toLowerCase().startsWith(shortName.toLowerCase()));
+  const tier3=ALL_GAUGES.filter(g=>g.river!==river.name&&g.sepaKey===river.sepa);
+
   const rank=arr=>arr.filter(g=>g.glat&&g.glon).sort((a,b)=>gd(userLat,userLon,a.glat,a.glon)-gd(userLat,userLon,b.glat,b.glon));
-  const rivGauges=[...rank(exactGauges),...rank(catchGauges)];
+  // Prefer tier1 (main river gauges) → tier2 (tributary gauges on same river) → tier3 (catchment fallback)
+  const rivGauges=[...rank(tier1),...rank(tier2),...rank(tier3)];
   let bestGauge=rivGauges[0];
   if(bestGauge){
     await loadConditionsForGauge(bestGauge,userLat,userLon,pn||river.name);
