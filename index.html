@@ -78,6 +78,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 .hscroll::-webkit-scrollbar-thumb{background:var(--text3);border-radius:2px}
 .hcell{flex-shrink:0;width:62px;background:var(--bg3);border-radius:9px;padding:8px 4px;text-align:center;border:1px solid var(--border)}
 .hcell.now{border-color:var(--accent);background:rgba(74,158,106,.1)}
+.hcell.past{opacity:.6}
 .ht{font-size:10px;font-weight:500;color:var(--text3)}.hi{font-size:17px;margin:4px 0}.hv{font-size:12px;font-weight:500;color:var(--text)}.hs{font-size:10px;color:var(--text3);margin-top:2px}
 .pbar-bg{height:5px;background:var(--bg4);border-radius:3px;overflow:hidden}
 .pbar-fill{height:100%;border-radius:3px;transition:width .6s;background:var(--accent)}
@@ -486,7 +487,7 @@ window.addEventListener('offline', () => { /* banner is set by fetch failures, n
 async function fetchWxWithCache(lat, lon) {
   try {
     const r = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,
       { signal: AbortSignal.timeout(5000) }
     );
     if(!r.ok) throw new Error('wx fetch failed');
@@ -502,7 +503,7 @@ async function fetchWxWithCache(lat, lon) {
 async function fetchFcWithCache(lat, lon) {
   try {
     const r = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,surface_pressure_mean,sunrise,sunset&hourly=temperature_2m,precipitation,windspeed_10m,surface_pressure,weathercode&forecast_days=7&timezone=Europe%2FLondon`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max,windgusts_10m_max,winddirection_10m_dominant,surface_pressure_mean,sunrise,sunset&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode&forecast_days=7&timezone=Europe%2FLondon`,
       { signal: AbortSignal.timeout(5000) }
     );
     if(!r.ok) throw new Error('fc fetch failed');
@@ -1595,6 +1596,7 @@ ${w?`<div class="g3">
   <div class="met"><div class="mv">${fmtRain(w.precipitation||0)}</div><div class="ml">${rainLabel()}</div></div>
   <div class="met"><div class="mv">${moon.icon}</div><div class="ml">${moon.name.split(' ')[0]}</div></div>
 </div>
+${w.windgusts_10m&&w.windgusts_10m>w.windspeed_10m*1.3&&w.windgusts_10m>15?`<div style="font-size:11px;color:var(--ambl);padding:2px 0">💨 Gusts up to ${fmtWind(w.windgusts_10m)}</div>`:''}
 <div class="cf">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
     <span style="font-size:11px;color:var(--text3)">Pressure · 6h trend</span>
@@ -1621,9 +1623,38 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
 
 /* HOURLY SECTION */
 function buildHourly(h){
-  const curHr=new Date().getHours();
-  const cells=h.time.map((t,i)=>{const hr=new Date(t).getHours();if(hr<curHr)return null;const isNow=hr===curHr;return`<div class="hcell${isNow?' now':''}"><div class="ht">${isNow?'Now':String(hr).padStart(2,'0')+'h'}</div><div class="hi">${wxI(h.weathercode?.[i]||0)}</div><div class="hv">${fmtTemp(h.temperature_2m[i])}</div><div class="hs">${fmtRain(h.precipitation?.[i]||0)}</div><div class="hs">${fmtWind(h.windspeed_10m?.[i]||0)}</div><div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div></div>`;}).filter(Boolean).join('');
-  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly forecast today</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind · Pressure</div></div>`;}
+  const now=new Date();
+  const curHr=now.getHours();
+  // Show -3h to +8h relative to now (12 slots total)
+  const windowStart=curHr-3;
+  const windowEnd=curHr+8;
+  const cells=h.time.map((t,i)=>{
+    const hr=new Date(t).getHours();
+    const dayOffset=new Date(t).getDate()-now.getDate();
+    // Only include today's hours in our window (dayOffset=0) plus next-day if window crosses midnight
+    const absHr=dayOffset*24+hr;
+    const absNow=curHr;
+    if(absHr<absNow-3||absHr>absNow+8)return null;
+    const isNow=dayOffset===0&&hr===curHr;
+    const isPast=absHr<absNow;
+    const dir=wDir(h.winddirection_10m?.[i]||0);
+    const speed=h.windspeed_10m?.[i]||0;
+    const gusts=h.windgusts_10m?.[i]||0;
+    const hasGusts=gusts>speed*1.3&&gusts>15; // only show gusts if meaningfully higher
+    const windStr=`${dir} ${fmtWind(speed)}`;
+    const gustStr=hasGusts?`<div class="hs" style="color:var(--ambl)">↑${fmtWind(gusts)}</div>`:'';
+    return`<div class="hcell${isNow?' now':''}${isPast?' past':''}">
+      <div class="ht" style="${isPast?'opacity:.55':''}">${isNow?'Now':String(hr).padStart(2,'0')+'h'}</div>
+      <div class="hi">${wxI(h.weathercode?.[i]||0)}</div>
+      <div class="hv">${fmtTemp(h.temperature_2m[i])}</div>
+      <div class="hs">${fmtRain(h.precipitation?.[i]||0)}</div>
+      <div class="hs">${windStr}</div>
+      ${gustStr}
+      <div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure</div></div>`;
+}
 function toggleHourly(){const s=document.getElementById('hourly-section'),a=document.getElementById('hourly-arr');if(!s)return;const op=s.style.display!=='none';s.style.display=op?'none':'block';if(a)a.textContent=op?'▼':'▲';}
 
 /* CATCHMENT PICKER */
@@ -1665,7 +1696,7 @@ async function loadCatchGauge(catKey,idx){
 }
 
 /* ALERTS */
-function getAlerts(fc){if(!fc||!fc.daily)return[];const a=[],d=fc.daily,today=new Date().toISOString().slice(0,10);for(let i=0;i<Math.min(3,d.time.length);i++){const wind=d.windspeed_10m_max[i],rain=d.precipitation_sum[i],code=d.weathercode[i];const day=d.time[i]===today?'Today':i===1?'Tomorrow':new Date(d.time[i]+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short'});if(wind>50)a.push({lv:'red',title:`⚠️ High wind — ${day}`,desc:`Winds up to ${fmtWind(wind)}. Dangerous wading.`});else if(wind>35)a.push({lv:'amber',title:`⚠️ Strong winds — ${day}`,desc:`Winds up to ${fmtWind(wind)}. Difficult casting.`});if(rain>25)a.push({lv:'amber',title:`🌧️ Heavy rain — ${day}`,desc:`${fmtRain(rain)} forecast. River levels will rise.`});if([95,96,99].includes(code))a.push({lv:'red',title:`⛈️ Thunderstorm — ${day}`,desc:`Leave the river if thunder is heard.`});}return a;}
+function getAlerts(fc){if(!fc||!fc.daily)return[];const a=[],d=fc.daily,today=new Date().toISOString().slice(0,10);for(let i=0;i<Math.min(3,d.time.length);i++){const wind=d.windspeed_10m_max[i],gusts=d.windgusts_10m_max?.[i]||0,rain=d.precipitation_sum[i],code=d.weathercode[i];const day=d.time[i]===today?'Today':i===1?'Tomorrow':new Date(d.time[i]+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short'});if(wind>50)a.push({lv:'red',title:`⚠️ High wind — ${day}`,desc:`Winds up to ${fmtWind(wind)}${gusts>wind*1.3?', gusts up to '+fmtWind(gusts):''}. Dangerous wading.`});else if(wind>35)a.push({lv:'amber',title:`⚠️ Strong winds — ${day}`,desc:`Winds up to ${fmtWind(wind)}${gusts>wind*1.3?', gusts up to '+fmtWind(gusts):''}. Difficult casting.`});else if(gusts>50)a.push({lv:'amber',title:`💨 Gusty conditions — ${day}`,desc:`Gusts up to ${fmtWind(gusts)} expected. Take care on exposed banks.`});if(rain>25)a.push({lv:'amber',title:`🌧️ Heavy rain — ${day}`,desc:`${fmtRain(rain)} forecast. River levels will rise.`});if([95,96,99].includes(code))a.push({lv:'red',title:`⛈️ Thunderstorm — ${day}`,desc:`Leave the river if thunder is heard.`});}return a;}
 function aB(a){return`<div class="ab ${a.lv==='red'?'ab-r':'ab-a'}"><div class="abt" style="color:${a.lv==='red'?'var(--redl)':'var(--ambl)'}">${a.title}</div><div class="abd">${a.desc}</div></div>`;}
 
 /* 7-DAY FORECAST */
@@ -1809,9 +1840,24 @@ function showDayDetail(i,lagHours){
   const sunrise=d.sunrise?.[i]?new Date(d.sunrise[i]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
   const sunset=d.sunset?.[i]?new Date(d.sunset[i]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
   const p=d.surface_pressure_mean?.[i]||1013;const pt=pTrend(p);
+  const windDir=wDir(d.winddirection_10m_dominant?.[i]||0);
+  const maxWind=d.windspeed_10m_max[i];
+  const maxGusts=d.windgusts_10m_max?.[i]||0;
+  const hasGusts=maxGusts>maxWind*1.3&&maxGusts>15;
   let hourlyHTML='';
-  if(fc.hourly){const dayHours=fc.hourly.time.reduce((acc,t,idx)=>{if(t.startsWith(date))acc.push({t,idx});return acc;},[]);if(dayHours.length>0){hourlyHTML=`<div style="margin-top:11px"><div class="lbl" style="margin-bottom:7px">Hourly breakdown</div><div class="hscroll">${dayHours.map(({t,idx})=>`<div class="hcell"><div class="ht">${String(new Date(t).getHours()).padStart(2,'0')}h</div><div class="hi">${wxI(fc.hourly.weathercode?.[idx]||0)}</div><div class="hv">${fmtTemp(fc.hourly.temperature_2m[idx])}</div><div class="hs">${fmtRain(fc.hourly.precipitation?.[idx]||0)}</div><div class="hs">${fmtWind(fc.hourly.windspeed_10m?.[idx]||0)}</div><div class="hs">${Math.round(fc.hourly.surface_pressure?.[idx]||1013)}hPa</div></div>`).join('')}</div></div>`;}}
-  document.getElementById('modal-day-content').innerHTML=`<div class="mt">${dn}</div><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="ring r${cls}" style="width:48px;height:48px;font-size:18px">${sc}</div><div><div style="font-size:13px;font-weight:500;color:var(--text)">${sc>=7?'Good — go fishing':sc>=4?'Fair — worth a try':'Poor — avoid if possible'}</div><span class="badge b${cls}">${sc}/10</span></div></div><div class="g4" style="margin-bottom:11px"><div class="met"><div class="mv">${fmtTemp(d.temperature_2m_max[i])}</div><div class="ml">High</div></div><div class="met"><div class="mv">${fmtTemp(d.temperature_2m_min[i])}</div><div class="ml">Low</div></div><div class="met"><div class="mv" style="color:var(--bluel)">${fmtRain(d.precipitation_sum[i])}</div><div class="ml">Rain</div></div><div class="met"><div class="mv">${fmtWind(d.windspeed_10m_max[i])}</div><div class="ml">Max wind</div></div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text3)">Pressure</span><strong style="color:var(--text)">${Math.round(p)} hPa</strong></div><div class="pbar-bg"><div class="pbar-fill" style="width:${Math.round(((p-960)/(1060-960))*100)}%"></div></div><div style="font-size:10px;font-weight:500;color:${pt.col};margin-top:4px">${pt.text}</div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--text3)">Sunrise</span><span style="color:var(--text);font-weight:500">${sunrise}</span></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:var(--text3)">Sunset</span><span style="color:var(--text);font-weight:500">${sunset}</span></div></div>${hourlyHTML}`;
+  if(fc.hourly){
+    const dayHours=fc.hourly.time.reduce((acc,t,idx)=>{if(t.startsWith(date))acc.push({t,idx});return acc;},[]);
+    if(dayHours.length>0){
+      hourlyHTML=`<div style="margin-top:11px"><div class="lbl" style="margin-bottom:7px">Hourly breakdown</div><div class="hscroll">${dayHours.map(({t,idx})=>{
+        const hDir=wDir(fc.hourly.winddirection_10m?.[idx]||0);
+        const hSpd=fc.hourly.windspeed_10m?.[idx]||0;
+        const hGust=fc.hourly.windgusts_10m?.[idx]||0;
+        const hHasGust=hGust>hSpd*1.3&&hGust>15;
+        return`<div class="hcell"><div class="ht">${String(new Date(t).getHours()).padStart(2,'0')}h</div><div class="hi">${wxI(fc.hourly.weathercode?.[idx]||0)}</div><div class="hv">${fmtTemp(fc.hourly.temperature_2m[idx])}</div><div class="hs">${fmtRain(fc.hourly.precipitation?.[idx]||0)}</div><div class="hs">${hDir} ${fmtWind(hSpd)}</div>${hHasGust?`<div class="hs" style="color:var(--ambl)">↑${fmtWind(hGust)}</div>`:''}<div class="hs">${Math.round(fc.hourly.surface_pressure?.[idx]||1013)}hPa</div></div>`;
+      }).join('')}</div></div>`;
+    }
+  }
+  document.getElementById('modal-day-content').innerHTML=`<div class="mt">${dn}</div><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="ring r${cls}" style="width:48px;height:48px;font-size:18px">${sc}</div><div><div style="font-size:13px;font-weight:500;color:var(--text)">${sc>=7?'Good — go fishing':sc>=4?'Fair — worth a try':'Poor — avoid if possible'}</div><span class="badge b${cls}">${sc}/10</span></div></div><div class="g4" style="margin-bottom:11px"><div class="met"><div class="mv">${fmtTemp(d.temperature_2m_max[i])}</div><div class="ml">High</div></div><div class="met"><div class="mv">${fmtTemp(d.temperature_2m_min[i])}</div><div class="ml">Low</div></div><div class="met"><div class="mv" style="color:var(--bluel)">${fmtRain(d.precipitation_sum[i])}</div><div class="ml">Rain</div></div><div class="met"><div class="mv">${windDir} ${fmtWind(maxWind)}</div><div class="ml">Max wind</div></div></div>${hasGusts?`<div style="font-size:11px;color:var(--ambl);margin-bottom:9px">💨 Gusts up to ${fmtWind(maxGusts)}</div>`:''}<div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text3)">Pressure</span><strong style="color:var(--text)">${Math.round(p)} hPa</strong></div><div class="pbar-bg"><div class="pbar-fill" style="width:${Math.round(((p-960)/(1060-960))*100)}%"></div></div><div style="font-size:10px;font-weight:500;color:${pt.col};margin-top:4px">${pt.text}</div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--text3)">Sunrise</span><span style="color:var(--text);font-weight:500">${sunrise}</span></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:var(--text3)">Sunset</span><span style="color:var(--text);font-weight:500">${sunset}</span></div></div>${hourlyHTML}`;
   openModal('modal-day');
 }
 
