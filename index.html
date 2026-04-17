@@ -163,7 +163,11 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 .spn{font-size:14px;font-weight:500;color:var(--text);font-family:var(--fd)}.sps{font-size:11px;color:var(--text3);margin-top:2px}
 .ia{background:var(--bg4);border:1px solid var(--border2);border-radius:7px;padding:6px 11px;font-size:11px;color:var(--text2);cursor:pointer;font-family:var(--fb);transition:background .15s;white-space:nowrap}
 .ia:hover{background:var(--bg3)}.ia.grn{background:rgba(74,158,106,.12);border-color:rgba(74,158,106,.3);color:var(--al)}
-/* OFFLINE */
+/* UNITS TOGGLE */
+.units-toggle{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:3px 8px;cursor:pointer;user-select:none}
+.ut-m,.ut-i{font-size:11px;font-weight:400;color:var(--text2);transition:font-weight .15s,color .15s}
+.ut-track{width:52px;height:22px;background:var(--bg4);border-radius:11px;position:relative;margin:0 2px;border:1px solid var(--border2)}
+.ut-knob{width:22px;height:18px;background:var(--accent);border-radius:9px;position:absolute;top:1px;left:1px;transition:transform .2s cubic-bezier(.4,0,.2,1)}
 .offline-bar{display:none;background:rgba(200,146,42,.12);border-bottom:1px solid rgba(200,146,42,.3);padding:5px 14px;font-size:11px;color:var(--ambl);flex-shrink:0;align-items:center;gap:6px;justify-content:space-between}
 .offline-bar.show{display:flex}
 .offline-bar.stale{background:rgba(201,64,64,.1);border-bottom-color:rgba(201,64,64,.3);color:var(--redl)}
@@ -173,7 +177,13 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 </head>
 <body>
 <div class="app" id="app">
-<div class="sb"><span id="clock">9:41</span><span>GPS</span></div>
+<div class="sb"><span id="clock">9:41</span>
+  <div class="units-toggle" id="units-toggle" data-metric="1" onclick="setUnits(this.dataset.metric!=='1')">
+    <span class="ut-m" style="font-weight:600">°C</span>
+    <div class="ut-track"><div class="ut-knob"></div></div>
+    <span class="ut-i">°F</span>
+  </div>
+<span>GPS</span></div>
 <div class="offline-bar" id="offline-bar">
   <span id="offline-msg">📵 Offline — showing cached data</span>
   <span id="offline-age" style="font-size:10px;opacity:.8"></span>
@@ -789,6 +799,42 @@ let favRivers=JSON.parse(localStorage.getItem('g_favrivers') ||'["River Tay","Ri
 let favLocs  =JSON.parse(localStorage.getItem('g_favlocs')   ||'[]');
 let pending={};let hereData={};let curHTab='now';let curLogTab='catches';let expSpec={};
 
+/* UNITS */
+let useMetric=localStorage.getItem('g_units')!=='imperial';
+function setUnits(metric){
+  useMetric=metric;
+  localStorage.setItem('g_units',metric?'metric':'imperial');
+  // Update toggle UI
+  const tog=document.getElementById('units-toggle');
+  if(tog){tog.dataset.metric=metric?'1':'0';
+    tog.querySelector('.ut-m').style.fontWeight=metric?'600':'400';
+    tog.querySelector('.ut-i').style.fontWeight=metric?'400':'600';
+    tog.querySelector('.ut-knob').style.transform=metric?'translateX(0)':'translateX(36px)';
+  }
+  // Re-render current view if conditions are loaded
+  if(hereData.wx)refreshHereView();
+}
+function refreshHereView(){
+  if(!hereData.wx)return;
+  const {lat,lon,river,wx,rv,fc,st}=hereData;
+  const p6h=calc6hPressureTrend(wx?.hourly);
+  const alerts=getAlerts(fc);
+  const cond=scoreNow(wx?.current,rv,st?.nMax,p6h);
+  document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,lat,lon,alerts,wx?.hourly,fc,null);
+  renderForecast(fc,alerts,st?.lag||18);
+  if(curHTab==='river'&&rv)setTimeout(()=>drawRiverGraph(rv),80);
+}
+
+/* Unit conversion helpers */
+function fmtTemp(c){if(c===null||c===undefined)return'—';return useMetric?`${Math.round(c)}°C`:`${Math.round(c*9/5+32)}°F`;}
+function fmtWind(kmh){if(kmh===null||kmh===undefined)return'—';return useMetric?`${Math.round(kmh)} km/h`:`${Math.round(kmh*0.621)} mph`;}
+function fmtRain(mm){if(mm===null||mm===undefined)return'—';return useMetric?`${mm.toFixed(1)} mm`:`${(mm*0.0394).toFixed(2)} in`;}
+function fmtLevel(m){if(m===null||m===undefined)return'—';return useMetric?`${m.toFixed(2)} m`:`${(m*3.281).toFixed(2)} ft`;}
+function fmtNMax(m){if(m===null||m===undefined)return'—';return useMetric?`${m.toFixed(2)}m`:`${(m*3.281).toFixed(2)}ft`;}
+function windLabel(){return useMetric?'Wind km/h':'Wind mph';}
+function rainLabel(){return useMetric?'Precip mm':'Precip in';}
+function levelLabel(){return useMetric?'m':'ft';}
+
 /* UTILS */
 function gd(a,b,c,e){const R=6371,dL=(c-a)*Math.PI/180,dN=(e-b)*Math.PI/180;const x=Math.sin(dL/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dN/2)**2;return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));}
 function wDir(g){const a=['N','NE','E','SE','S','SW','W','NW'];return a[Math.round((g||0)/45)%8]||'—';}
@@ -811,35 +857,36 @@ function lvStat(lv,nMax,trend){
   const pct=lv/nm;
   const barPct=Math.min(99,Math.round(pct*90));
 
-  // Absolute wading depth takes priority for safety notes
-  // ~50-60cm is knee-deep on most Scottish rivers — the practical wading limit
-  let wadeNote='';
-  if(lv>0.9)       wadeNote='⚠️ Danger to life. Do not enter the water.';
-  else if(lv>0.6)  wadeNote='Wading dangerous — stay on the bank.';
-  else if(lv>0.5)  wadeNote='Careful wading only — take a wading staff.';
-  else if(lv>0.3)  wadeNote='Good wading conditions.';
-  else             wadeNote='Very shallow — fish are wary in clear water.';
-
-  // >100% — danger to life (also catches absolute danger)
-  if(pct>1.0)return{text:'Danger — do not fish',cls:'bn',pct:99,col:'var(--red)',wade:'⚠️ Danger to life. Check with local ghillies.'};
+  // >100% — danger
+  if(pct>1.0)return{text:'Danger — do not fish',cls:'bn',pct:99,col:'var(--red)',
+    wade:'⚠️ Danger to life — do not enter the water. Check with local ghillies.'};
   // 80–100% — flood
-  if(pct>0.8)return{text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',wade:'River likely running dirty. Check with local ghillies.'};
+  if(pct>0.8)return{text:'Flood — no go',cls:'bn',pct:Math.max(88,barPct),col:'var(--red)',
+    wade:'River running high and likely dirty. Do not wade. Check with local ghillies.'};
   // 60–80% — too high
-  if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',wade:wadeNote};
+  if(pct>0.6)return{text:'Too high — no go',cls:'bn',pct:Math.max(72,barPct),col:'var(--red)',
+    wade:'Wading is dangerous at this level. Stay on the bank.'};
   // 35–60% — depends on trend
   if(pct>0.35){
-    if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',wade:wadeNote};
-    if(trend==='falling')return{text:'Falling — conditions improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:wadeNote};
-    return{text:'Fishable — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',wade:wadeNote};
+    if(trend==='rising')return{text:'Rising — no go',cls:'bn',pct:Math.max(45,barPct),col:'var(--red)',
+      wade:'River rising — wading dangerous and conditions worsening.'};
+    if(trend==='falling')return{text:'Falling — improving',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
+      wade:'River on the high side but falling. Careful approach — conditions improving.'};
+    return{text:'High — careful approach',cls:'bc',pct:Math.max(45,barPct),col:'var(--amber)',
+      wade:'River running high. Careful wading only — take a wading staff.'};
   }
   // 10–35% — ideal band
   if(pct>0.10){
-    if(trend==='rising')return{text:'Rising — conditions changing',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',wade:wadeNote};
-    if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:wadeNote};
-    return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',wade:wadeNote};
+    if(trend==='rising')return{text:'Rising — watch closely',cls:'bc',pct:Math.max(15,barPct),col:'var(--amber)',
+      wade:'Good level now but rising. Monitor closely and be ready to leave.'};
+    if(trend==='falling')return{text:'Ideal — prime conditions',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
+      wade:'Perfect wading level and falling. Fish are likely active — prime time.'};
+    return{text:'Ideal — good wading',cls:'bg',pct:Math.max(15,barPct),col:'var(--accent)',
+      wade:'Good wading conditions. Safe to fish.'};
   }
   // <10% — very low
-  return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',wade:wadeNote};
+  return{text:'Very low — tricky',cls:'bc',pct:5,col:'var(--amber)',
+    wade:'Very low and clear. Fish are wary — use a small fly and fine tippet.'};
 }function tClass(t){return t==='falling'?'t-d':t==='rising'?'t-u':'t-s';}
 function tArr(t){return t==='falling'?'▼':t==='rising'?'▲':'—';}
 function scoreNow(w,r,nMax,pressureTrend6h){
@@ -1449,8 +1496,8 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
 <div class="lbl">River level — ${gaugeName}</div>
 <div class="card">
   ${river.noData?`<div style="font-size:12px;color:var(--text3)">No SEPA catchment data available for this water.</div>`
-  :rv?`<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:21px;font-weight:500;font-family:var(--fd);color:var(--text)">${rv.level.toFixed(2)} m</span><span class="badge ${ls.cls}">${ls.text}</span></div>
-  <div style="font-size:12px;color:var(--text3);margin:7px 0 3px;display:flex;gap:14px"><span>Trend <span class="${tClass(rv.trend)}" style="font-weight:500">${tArr(rv.trend)} ${rv.trend}</span></span><span>Normal max: ${(st?.nMax||3).toFixed(2)}m</span></div>
+  :rv?`<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:21px;font-weight:500;font-family:var(--fd);color:var(--text)">${fmtLevel(rv.level)}</span><span class="badge ${ls.cls}">${ls.text}</span></div>
+  <div style="font-size:12px;color:var(--text3);margin:7px 0 3px;display:flex;gap:14px"><span>Trend <span class="${tClass(rv.trend)}" style="font-weight:500">${tArr(rv.trend)} ${rv.trend}</span></span><span>Normal max: ${fmtNMax(st?.nMax||3)}</span></div>
   <div class="lvbar-bg"><div class="lvbar-fill" style="width:${ls.pct}%;background:${ls.col}"></div></div>
   <div class="lvzr"><span class="lvz">Low</span><span class="lvz">Ideal</span><span class="lvz" style="color:var(--ambl)">High</span><span class="lvz" style="color:var(--redl)">Flood</span></div>
   ${ls.wade?`<div style="font-size:11px;font-weight:500;color:${ls.col};margin-top:5px">🦺 ${ls.wade}</div>`:''}
@@ -1460,14 +1507,14 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
   ${!river.noData?sepaLink(st):''}
 </div>
 <div class="g4">
-  <div class="met"><div class="mv">${w?Math.round(w.temperature_2m)+'°':'—'}</div><div class="ml">Air temp</div></div>
-  <div class="met"><div class="mv" style="color:${waterTemp!==null?(waterTemp<7?'var(--bluel)':waterTemp<14?'var(--al)':'var(--ambl)'):'var(--text3)'}">${wtDisplay}</div><div class="ml">Water temp</div></div>
+  <div class="met"><div class="mv">${w?fmtTemp(w.temperature_2m):'—'}</div><div class="ml">Air temp</div></div>
+  <div class="met"><div class="mv" style="color:${waterTemp!==null?(waterTemp<7?'var(--bluel)':waterTemp<14?'var(--al)':'var(--ambl)'):'var(--text3)'}">${waterTemp!==null?fmtTemp(waterTemp):'—'}</div><div class="ml">Water temp</div></div>
   <div class="met"><div class="mv">${sunrise}</div><div class="ml">Sunrise</div></div>
   <div class="met"><div class="mv">${sunset}</div><div class="ml">Sunset</div></div>
 </div>
 ${w?`<div class="g3">
-  <div class="met"><div class="mv">${wDir(w.winddirection_10m)} ${Math.round(w.windspeed_10m)}</div><div class="ml">Wind km/h</div></div>
-  <div class="met"><div class="mv">${(w.precipitation||0).toFixed(1)}mm</div><div class="ml">Precip now</div></div>
+  <div class="met"><div class="mv">${wDir(w.winddirection_10m)} ${fmtWind(w.windspeed_10m)}</div><div class="ml">${windLabel()}</div></div>
+  <div class="met"><div class="mv">${fmtRain(w.precipitation||0)}</div><div class="ml">${rainLabel()}</div></div>
   <div class="met"><div class="mv">${moon.icon}</div><div class="ml">${moon.name.split(' ')[0]}</div></div>
 </div>
 <div class="cf">
@@ -1497,7 +1544,7 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
 /* HOURLY SECTION */
 function buildHourly(h){
   const curHr=new Date().getHours();
-  const cells=h.time.map((t,i)=>{const hr=new Date(t).getHours();if(hr<curHr)return null;const isNow=hr===curHr;return`<div class="hcell${isNow?' now':''}"><div class="ht">${isNow?'Now':String(hr).padStart(2,'0')+'h'}</div><div class="hi">${wxI(h.weathercode?.[i]||0)}</div><div class="hv">${Math.round(h.temperature_2m[i])}°</div><div class="hs">${(h.precipitation?.[i]||0).toFixed(1)}mm</div><div class="hs">${Math.round(h.windspeed_10m?.[i]||0)}km/h</div><div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div></div>`;}).filter(Boolean).join('');
+  const cells=h.time.map((t,i)=>{const hr=new Date(t).getHours();if(hr<curHr)return null;const isNow=hr===curHr;return`<div class="hcell${isNow?' now':''}"><div class="ht">${isNow?'Now':String(hr).padStart(2,'0')+'h'}</div><div class="hi">${wxI(h.weathercode?.[i]||0)}</div><div class="hv">${fmtTemp(h.temperature_2m[i])}</div><div class="hs">${fmtRain(h.precipitation?.[i]||0)}</div><div class="hs">${fmtWind(h.windspeed_10m?.[i]||0)}</div><div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div></div>`;}).filter(Boolean).join('');
   return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly forecast today</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind · Pressure</div></div>`;}
 function toggleHourly(){const s=document.getElementById('hourly-section'),a=document.getElementById('hourly-arr');if(!s)return;const op=s.style.display!=='none';s.style.display=op?'none':'block';if(a)a.textContent=op?'▼':'▲';}
 
@@ -1536,7 +1583,7 @@ async function loadCatchGauge(catKey,idx){
 }
 
 /* ALERTS */
-function getAlerts(fc){if(!fc||!fc.daily)return[];const a=[],d=fc.daily,today=new Date().toISOString().slice(0,10);for(let i=0;i<Math.min(3,d.time.length);i++){const wind=d.windspeed_10m_max[i],rain=d.precipitation_sum[i],code=d.weathercode[i];const day=d.time[i]===today?'Today':i===1?'Tomorrow':new Date(d.time[i]+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short'});if(wind>50)a.push({lv:'red',title:`⚠️ High wind — ${day}`,desc:`Winds up to ${Math.round(wind)} km/h. Dangerous wading.`});else if(wind>35)a.push({lv:'amber',title:`⚠️ Strong winds — ${day}`,desc:`Winds up to ${Math.round(wind)} km/h. Difficult casting.`});if(rain>25)a.push({lv:'amber',title:`🌧️ Heavy rain — ${day}`,desc:`${Math.round(rain)}mm forecast. River levels will rise.`});if([95,96,99].includes(code))a.push({lv:'red',title:`⛈️ Thunderstorm — ${day}`,desc:`Leave the river if thunder is heard.`});}return a;}
+function getAlerts(fc){if(!fc||!fc.daily)return[];const a=[],d=fc.daily,today=new Date().toISOString().slice(0,10);for(let i=0;i<Math.min(3,d.time.length);i++){const wind=d.windspeed_10m_max[i],rain=d.precipitation_sum[i],code=d.weathercode[i];const day=d.time[i]===today?'Today':i===1?'Tomorrow':new Date(d.time[i]+'T12:00:00').toLocaleDateString('en-GB',{weekday:'short'});if(wind>50)a.push({lv:'red',title:`⚠️ High wind — ${day}`,desc:`Winds up to ${fmtWind(wind)}. Dangerous wading.`});else if(wind>35)a.push({lv:'amber',title:`⚠️ Strong winds — ${day}`,desc:`Winds up to ${fmtWind(wind)}. Difficult casting.`});if(rain>25)a.push({lv:'amber',title:`🌧️ Heavy rain — ${day}`,desc:`${fmtRain(rain)} forecast. River levels will rise.`});if([95,96,99].includes(code))a.push({lv:'red',title:`⛈️ Thunderstorm — ${day}`,desc:`Leave the river if thunder is heard.`});}return a;}
 function aB(a){return`<div class="ab ${a.lv==='red'?'ab-r':'ab-a'}"><div class="abt" style="color:${a.lv==='red'?'var(--redl)':'var(--ambl)'}">${a.title}</div><div class="abd">${a.desc}</div></div>`;}
 
 /* 7-DAY FORECAST */
@@ -1566,9 +1613,9 @@ function renderForecast(fc,alerts,lagHours){
     return`<div class="fday${date===today?' today':''}" onclick="showDayDetail(${i},${lag})" id="fd-${i}">
       <div class="fd-d">${dn}</div>
       <div class="fd-i">${wxI(d.weathercode[i])}${lagWarn}</div>
-      <div class="fd-h">${Math.round(d.temperature_2m_max[i])}°</div>
-      <div class="fd-l">${Math.round(d.temperature_2m_min[i])}°</div>
-      <div class="fd-r">${Math.round(d.precipitation_sum[i])}mm</div>
+      <div class="fd-h">${fmtTemp(d.temperature_2m_max[i])}</div>
+      <div class="fd-l">${fmtTemp(d.temperature_2m_min[i])}</div>
+      <div class="fd-r">${fmtRain(d.precipitation_sum[i])}</div>
       <div class="fd-sc ${fc_cls}">${sc>=7?'Go':sc>=4?'Fair':'No go'}</div>
     </div>`;
   }).join('');
@@ -1681,8 +1728,8 @@ function showDayDetail(i,lagHours){
   const sunset=d.sunset?.[i]?new Date(d.sunset[i]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
   const p=d.surface_pressure_mean?.[i]||1013;const pt=pTrend(p);
   let hourlyHTML='';
-  if(fc.hourly){const dayHours=fc.hourly.time.reduce((acc,t,idx)=>{if(t.startsWith(date))acc.push({t,idx});return acc;},[]);if(dayHours.length>0){hourlyHTML=`<div style="margin-top:11px"><div class="lbl" style="margin-bottom:7px">Hourly breakdown</div><div class="hscroll">${dayHours.map(({t,idx})=>`<div class="hcell"><div class="ht">${String(new Date(t).getHours()).padStart(2,'0')}h</div><div class="hi">${wxI(fc.hourly.weathercode?.[idx]||0)}</div><div class="hv">${Math.round(fc.hourly.temperature_2m[idx])}°</div><div class="hs">${(fc.hourly.precipitation?.[idx]||0).toFixed(1)}mm</div><div class="hs">${Math.round(fc.hourly.windspeed_10m?.[idx]||0)}km/h</div><div class="hs">${Math.round(fc.hourly.surface_pressure?.[idx]||1013)}hPa</div></div>`).join('')}</div></div>`;}}
-  document.getElementById('modal-day-content').innerHTML=`<div class="mt">${dn}</div><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="ring r${cls}" style="width:48px;height:48px;font-size:18px">${sc}</div><div><div style="font-size:13px;font-weight:500;color:var(--text)">${sc>=7?'Good — go fishing':sc>=4?'Fair — worth a try':'Poor — avoid if possible'}</div><span class="badge b${cls}">${sc}/10</span></div></div><div class="g4" style="margin-bottom:11px"><div class="met"><div class="mv">${Math.round(d.temperature_2m_max[i])}°</div><div class="ml">High</div></div><div class="met"><div class="mv">${Math.round(d.temperature_2m_min[i])}°</div><div class="ml">Low</div></div><div class="met"><div class="mv" style="color:var(--bluel)">${Math.round(d.precipitation_sum[i])}mm</div><div class="ml">Rain</div></div><div class="met"><div class="mv">${Math.round(d.windspeed_10m_max[i])}</div><div class="ml">Max wind</div></div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text3)">Pressure</span><strong style="color:var(--text)">${Math.round(p)} hPa</strong></div><div class="pbar-bg"><div class="pbar-fill" style="width:${Math.round(((p-960)/(1060-960))*100)}%"></div></div><div style="font-size:10px;font-weight:500;color:${pt.col};margin-top:4px">${pt.text}</div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--text3)">Sunrise</span><span style="color:var(--text);font-weight:500">${sunrise}</span></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:var(--text3)">Sunset</span><span style="color:var(--text);font-weight:500">${sunset}</span></div></div>${hourlyHTML}`;
+  if(fc.hourly){const dayHours=fc.hourly.time.reduce((acc,t,idx)=>{if(t.startsWith(date))acc.push({t,idx});return acc;},[]);if(dayHours.length>0){hourlyHTML=`<div style="margin-top:11px"><div class="lbl" style="margin-bottom:7px">Hourly breakdown</div><div class="hscroll">${dayHours.map(({t,idx})=>`<div class="hcell"><div class="ht">${String(new Date(t).getHours()).padStart(2,'0')}h</div><div class="hi">${wxI(fc.hourly.weathercode?.[idx]||0)}</div><div class="hv">${fmtTemp(fc.hourly.temperature_2m[idx])}</div><div class="hs">${fmtRain(fc.hourly.precipitation?.[idx]||0)}</div><div class="hs">${fmtWind(fc.hourly.windspeed_10m?.[idx]||0)}</div><div class="hs">${Math.round(fc.hourly.surface_pressure?.[idx]||1013)}hPa</div></div>`).join('')}</div></div>`;}}
+  document.getElementById('modal-day-content').innerHTML=`<div class="mt">${dn}</div><div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="ring r${cls}" style="width:48px;height:48px;font-size:18px">${sc}</div><div><div style="font-size:13px;font-weight:500;color:var(--text)">${sc>=7?'Good — go fishing':sc>=4?'Fair — worth a try':'Poor — avoid if possible'}</div><span class="badge b${cls}">${sc}/10</span></div></div><div class="g4" style="margin-bottom:11px"><div class="met"><div class="mv">${fmtTemp(d.temperature_2m_max[i])}</div><div class="ml">High</div></div><div class="met"><div class="mv">${fmtTemp(d.temperature_2m_min[i])}</div><div class="ml">Low</div></div><div class="met"><div class="mv" style="color:var(--bluel)">${fmtRain(d.precipitation_sum[i])}</div><div class="ml">Rain</div></div><div class="met"><div class="mv">${fmtWind(d.windspeed_10m_max[i])}</div><div class="ml">Max wind</div></div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px"><span style="color:var(--text3)">Pressure</span><strong style="color:var(--text)">${Math.round(p)} hPa</strong></div><div class="pbar-bg"><div class="pbar-fill" style="width:${Math.round(((p-960)/(1060-960))*100)}%"></div></div><div style="font-size:10px;font-weight:500;color:${pt.col};margin-top:4px">${pt.text}</div></div><div class="cf" style="margin-bottom:11px"><div style="display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--text3)">Sunrise</span><span style="color:var(--text);font-weight:500">${sunrise}</span></div><div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px"><span style="color:var(--text3)">Sunset</span><span style="color:var(--text);font-weight:500">${sunset}</span></div></div>${hourlyHTML}`;
   openModal('modal-day');
 }
 
@@ -1780,24 +1827,23 @@ function initMap(){
   if(_mapReady)return;
   if(typeof L==='undefined')return;
   const mapEl=document.getElementById('leaflet-map');
-  if(!mapEl||mapEl.offsetHeight===0)return;
-  _leafletMap=L.map('leaflet-map',{center:[56.8,-4.0],zoom:7,zoomControl:true});
+  if(!mapEl)return;
+  // If container has no height yet, retry after a short delay
+  if(mapEl.offsetHeight===0){setTimeout(initMap,150);return;}
+  _leafletMap=L.map('leaflet-map',{center:[56.8,-4.0],zoom:7,zoomControl:true,tap:true,tapTolerance:15});
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
     attribution:'© OpenStreetMap © CARTO',maxZoom:19,subdomains:'abcd'
   }).addTo(_leafletMap);
   _leafletMap.on('click',e=>{
     if(!_placingMode) return;
-    // User tapped map to place pin
     _pendingPin=_pendingPin||{cat:'parking'};
     _pendingPin.lat=e.latlng.lat;
     _pendingPin.lon=e.latlng.lng;
     updatePlacingMarker(e.latlng.lat,e.latlng.lng);
-    // Hide placing UI and reopen modal
     _placingMode=false;
     document.getElementById('map-tap-banner').style.display='none';
     document.getElementById('map-place-cancel').style.display='none';
     openModal('modal-pin');
-    // Update location display in modal
     const locEl=document.getElementById('pin-loc-display');
     if(locEl)locEl.textContent=`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
   });
@@ -1813,7 +1859,10 @@ function loadLeaflet(cb){
 }
 
 function openMyMap(){
-  loadLeaflet(()=>setTimeout(()=>{initMap();if(_leafletMap)_leafletMap.invalidateSize();},80));
+  loadLeaflet(()=>setTimeout(()=>{
+    initMap();
+    if(_leafletMap)_leafletMap.invalidateSize();
+  },120));
 }
 
 function renderPins(){
@@ -2012,7 +2061,7 @@ async function showNewCatch(){
 async function loadCatchForm(){
   const [wx,rv]=await Promise.all([pending.lat?fetchWx(pending.lat,pending.lon):Promise.resolve(null),pending.sepa?fetchSEPA(pending.sepa):Promise.resolve(null)]);
   pending.weather=wx;pending.riverData=rv;const now=new Date();const w=wx?.current;
-  document.getElementById('nc-content').innerHTML=`<div class="lbl">Auto-detected conditions</div><div class="cf" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px"><div class="ldc"><div class="k">Location</div><div class="v" style="font-size:11px">${pending.river||'Unknown'}</div></div><div class="ldc"><div class="k">Time</div><div class="v" style="font-size:11px">${fmtT(now)}, ${fmtD(now)}</div></div>${w?`<div class="ldc"><div class="k">Air temp</div><div class="v">${Math.round(w.temperature_2m)}°C</div></div>`:''} ${w?`<div class="ldc"><div class="k">Pressure</div><div class="v">${Math.round(w.surface_pressure)} hPa</div></div>`:''} ${w?`<div class="ldc"><div class="k">Wind</div><div class="v">${wDir(w.winddirection_10m)} ${Math.round(w.windspeed_10m)} km/h</div></div>`:''} ${rv?`<div class="ldc"><div class="k">River level</div><div class="v">${rv.level.toFixed(2)}m (${rv.trend})</div></div>`:`<div class="ldc"><div class="k">River level</div><div class="v" style="color:var(--text3)">Not loaded</div></div>`}</div>
+  document.getElementById('nc-content').innerHTML=`<div class="lbl">Auto-detected conditions</div><div class="cf" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px"><div class="ldc"><div class="k">Location</div><div class="v" style="font-size:11px">${pending.river||'Unknown'}</div></div><div class="ldc"><div class="k">Time</div><div class="v" style="font-size:11px">${fmtT(now)}, ${fmtD(now)}</div></div>${w?`<div class="ldc"><div class="k">Air temp</div><div class="v">${fmtTemp(w.temperature_2m)}</div></div>`:''} ${w?`<div class="ldc"><div class="k">Pressure</div><div class="v">${Math.round(w.surface_pressure)} hPa</div></div>`:''} ${w?`<div class="ldc"><div class="k">Wind</div><div class="v">${wDir(w.winddirection_10m)} ${fmtWind(w.windspeed_10m)}</div></div>`:''} ${rv?`<div class="ldc"><div class="k">River level</div><div class="v">${fmtLevel(rv.level)} (${rv.trend})</div></div>`:`<div class="ldc"><div class="k">River level</div><div class="v" style="color:var(--text3)">Not loaded</div></div>`}</div>
 <div class="lbl">Catch details</div>
 <div class="card" style="display:flex;flex-direction:column;gap:11px">
   <div class="fg"><label class="fl">Species *</label><select class="fsl" id="f-species"><option value="">Select species...</option>${SL_LOG.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
@@ -2051,6 +2100,8 @@ setInterval(tick,30000);tick();
 
 /* INIT */
 renderHome();renderBeats();
+// Apply saved units preference to toggle UI
+setUnits(useMetric);
 </script>
 </body>
 </html>
