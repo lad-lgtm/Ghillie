@@ -1766,11 +1766,18 @@ ${buildSpeciesCards(river,waterTemp)}
 /* Build collapsible species reference cards for a river */
 function buildSpeciesCards(river,waterTemp){
   const month=new Date().getMonth()+1;
-  // Map river species string to SPECIES_DATA keys
-  const spMap={'Atlantic Salmon':'atlantic_salmon','Salmon':'atlantic_salmon','Sea Trout':'sea_trout','Brown Trout':'brown_trout','Grayling':'grayling','Rainbow Trout':'rainbow_trout','Pike':'pike'};
+  // Map all name variants used in RIVERS data → SPECIES_DATA keys (case-insensitive)
+  const spMap={
+    'salmon':'atlantic_salmon','atlantic salmon':'atlantic_salmon',
+    'sea trout':'sea_trout','sea-trout':'sea_trout',
+    'brown trout':'brown_trout','brown-trout':'brown_trout','wild brown trout':'brown_trout',
+    'grayling':'grayling',
+    'rainbow trout':'rainbow_trout','rainbow-trout':'rainbow_trout',
+    'pike':'pike',
+  };
   const riverSpecies=(river.species||'').split(',').map(s=>s.trim());
   const cards=riverSpecies.map(sp=>{
-    const key=spMap[sp];
+    const key=spMap[sp.toLowerCase()];
     const sd=key?SPECIES_DATA[key]:null;
     if(!sd)return'';
     // Is this species in season right now?
