@@ -1768,7 +1768,7 @@ ${(()=>{
       'grayling':'grayling','rainbow trout':'rainbow_trout','pike':'pike'
     };
     const _riverSpecies=(river.species||'').split(',').map(s=>s.trim()).filter(s=>s&&s!=='—');
-    if(!_riverSpecies.length) return '<div style="font-size:12px;color:var(--text3)">No species data.</div>';
+    if(!_riverSpecies.length) return '<div style="font-size:12px;color:#5a7060">No species data.</div>';
     return _riverSpecies.map(sp=>{
       const key=_spMap[sp.toLowerCase()];
       const sd=key?SPECIES_DATA[key]:null;
@@ -1780,22 +1780,30 @@ ${(()=>{
         key==='rainbow_trout'||
         [10,11,12,1,2,3].includes(_month)&&key==='pike';
       const seasonBadge=inSeason
-        ?'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(74,158,106,.15);border:1px solid rgba(74,158,106,.3);color:var(--al)">In season</span>'
-        :'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--text3)">Out of season</span>';
+        ?'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(74,158,106,.15);border:1px solid rgba(74,158,106,.3);color:#7dc49a">In season</span>'
+        :'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#5a7060">Out of season</span>';
       const sid='sp-'+key+'-'+river.name.replace(/[^a-z0-9]/gi,'');
-      const tacticRows=sd.tactics.map(t=>'<div class="tr2"><span class="tk">'+t.k+'</span><span class="tv" style="max-width:60%;text-align:right;font-size:11px">'+t.v+'</span></div>').join('');
-      return '<div style="border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:7px">'
-        +'<div onclick="document.getElementById(\''+sid+'\').style.display=document.getElementById(\''+sid+'\').style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.sp-arr\').textContent=document.getElementById(\''+sid+'\').style.display===\'none\'?\'▼\':\'▲\'" style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:var(--surface)">'
-        +'<div style="display:flex;align-items:center;gap:9px">'
+      const tacticRows=sd.tactics.map(t=>
+        '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px">'
+        +'<span style="color:#5a7060">'+t.k+'</span>'
+        +'<span style="color:#8fa892;max-width:60%;text-align:right">'+t.v+'</span></div>'
+      ).join('');
+      return '<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;margin-bottom:7px">'
+        +'<div onclick="var el=document.getElementById(\''+sid+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'block\';this.querySelector(\'.sp-arr\').textContent=open?\'▼\':\'▲\';" '
+        +'style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:#1e2d22">'
+        +'<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
         +'<div style="width:10px;height:10px;border-radius:50%;background:'+sd.color+';flex-shrink:0"></div>'
-        +'<span style="font-size:13px;font-weight:500;color:var(--text)">'+sd.name+'</span> '+seasonBadge
-        +'</div><span class="sp-arr" style="font-size:11px;color:var(--text3)">▼</span></div>'
-        +'<div id="'+sid+'" style="display:none;padding:11px 13px;border-top:1px solid var(--border);background:var(--bg2)">'
-        +'<div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">'+sd.desc+'</div>'
-        +'<div style="font-size:10px;color:var(--text3);margin-bottom:7px">Season: '+sd.season+' · Best months: '+sd.bestMonths+'</div>'
+        +'<span style="font-size:13px;font-weight:500;color:#e8f0e9">'+sd.name+'</span>'
+        +' '+seasonBadge
+        +'</div>'
+        +'<span class="sp-arr" style="font-size:11px;color:#5a7060;flex-shrink:0;margin-left:8px">▼</span>'
+        +'</div>'
+        +'<div id="'+sid+'" style="display:none;padding:11px 13px;border-top:1px solid rgba(255,255,255,.08);background:#152019">'
+        +'<div style="font-size:11px;color:#5a7060;line-height:1.6;margin-bottom:9px">'+sd.desc+'</div>'
+        +'<div style="font-size:10px;color:#5a7060;margin-bottom:7px">Season: '+sd.season+' · Best: '+sd.bestMonths+'</div>'
         +tacticRows+'</div></div>';
     }).join('');
-  } catch(e) { return '<div style="font-size:12px;color:var(--redl)">Species error: '+e.message+'</div>'; }
+  } catch(e) { return '<div style="font-size:12px;color:#e05555">Species error: '+e.message+'</div>'; }
 })()} 
 <div class="lbl">Log a catch here</div>
 <button class="bp" onclick='quickLog(${JSON.stringify({name:river.name,lat,lon,sepa:river.sepa||null})})'>+ Log catch at ${river.name}</button>
