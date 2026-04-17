@@ -168,7 +168,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 .units-toggle{display:flex;align-items:center;gap:6px;background:var(--bg3);border:1px solid var(--border2);border-radius:20px;padding:3px 8px;cursor:pointer;user-select:none}
 .ut-m,.ut-i{font-size:11px;font-weight:400;color:var(--text2);transition:font-weight .15s,color .15s}
 .ut-track{width:52px;height:22px;background:var(--bg4);border-radius:11px;position:relative;margin:0 2px;border:1px solid var(--border2)}
-.ut-knob{width:22px;height:18px;background:var(--accent);border-radius:9px;position:absolute;top:1px;left:1px;transition:transform .2s cubic-bezier(.4,0,.2,1)}
+.ut-knob{width:24px;height:18px;background:var(--accent);border-radius:9px;position:absolute;top:1px;left:1px;transition:transform .2s cubic-bezier(.4,0,.2,1)}
 .offline-bar{display:none;background:rgba(200,146,42,.12);border-bottom:1px solid rgba(200,146,42,.3);padding:5px 14px;font-size:11px;color:var(--ambl);flex-shrink:0;align-items:center;gap:6px;justify-content:space-between}
 .offline-bar.show{display:flex}
 .offline-bar.stale{background:rgba(201,64,64,.1);border-bottom-color:rgba(201,64,64,.3);color:var(--redl)}
@@ -831,7 +831,7 @@ function setUnits(metric){
   if(tog){tog.dataset.metric=metric?'1':'0';
     tog.querySelector('.ut-m').style.fontWeight=metric?'600':'400';
     tog.querySelector('.ut-i').style.fontWeight=metric?'400':'600';
-    tog.querySelector('.ut-knob').style.transform=metric?'translateX(0)':'translateX(36px)';
+    tog.querySelector('.ut-knob').style.transform=metric?'translateX(0)':'translateX(26px)';
   }
   // Re-render current view if conditions are loaded
   if(hereData.wx)refreshHereView();
@@ -983,7 +983,16 @@ function scoreNow(w,r,nMax,pressureTrend6h){
     else if(p>1018)notes.push('High stable pressure');
     else if(p<1000){s-=1;notes.push('Low pressure');}
     if((w.temperature_2m||10)>=6&&(w.temperature_2m||10)<=16)s+=1;
-    if((w.windspeed_10m||0)>35){s-=1;notes.push('Strong winds');}
+    // Wind speed (km/h) — graduated penalty
+    const wind=w.windspeed_10m||0;
+    const gusts=w.windgusts_10m||0;
+    const effectiveWind=Math.max(wind,gusts*0.7); // gusts weighted at 70%
+    if(effectiveWind>60){s-=3;notes.push('Dangerous winds — do not fish');}
+    else if(effectiveWind>45){s-=2;notes.push('Very strong winds — difficult casting');}
+    else if(effectiveWind>30){s-=1;notes.push('Strong winds — casting affected');}
+    else if(effectiveWind>20){notes.push('Moderate winds — manageable');}
+    // Separate gust warning if gusts significantly exceed sustained wind
+    if(gusts>wind*1.4&&gusts>40&&effectiveWind<=45){s-=1;notes.push('Gusty conditions — unpredictable');}
   }
   s=Math.max(1,Math.min(10,s));
   return{score:s,cls:s>=7?'g':s>=4?'c':'n',
@@ -991,17 +1000,20 @@ function scoreNow(w,r,nMax,pressureTrend6h){
 }
 function scoreDay(o){
   let s=5;
-  // Own-day rain
   if((o.rain||0)>20)s-=2;else if((o.rain||0)>8)s-=1;
-  // Rainfall lag: yesterday's rain will affect today's river
-  // laggedRain = rain that fell 'lag' hours ago (passed in from forecast loop)
   if((o.laggedRain||0)>20)s-=2;else if((o.laggedRain||0)>10)s-=1;
-  if((o.wind||0)>40)s-=2;else if((o.wind||0)>25)s-=1;
+  // Wind + gusts — use same graduated scale as scoreNow
+  const wind=o.wind||0;
+  const gusts=o.gusts||0;
+  const effectiveWind=Math.max(wind,gusts*0.7);
+  if(effectiveWind>60)s-=3;
+  else if(effectiveWind>45)s-=2;
+  else if(effectiveWind>30)s-=1;
+  if(gusts>wind*1.4&&gusts>40&&effectiveWind<=45)s-=1;
   const p=o.pressure||1013;
   if(p>1015)s+=1;else if(p<1000)s-=1;
   const t=((o.hi||12)+(o.lo||6))/2;
   if(t>=6&&t<=16)s+=1;
-  // Falling river after previous rain = bonus
   if((o.laggedRain||0)>5&&(o.rain||0)<3)s+=1;
   return Math.max(1,Math.min(10,s));
 }
@@ -1733,6 +1745,7 @@ function renderForecast(fc,alerts,lagHours){
       rain:d.precipitation_sum[i],
       laggedRain,
       wind:d.windspeed_10m_max[i],
+      gusts:d.windgusts_10m_max?.[i]||0,
       pressure:d.surface_pressure_mean?.[i]||1013,
       hi:d.temperature_2m_max[i],
       lo:d.temperature_2m_min[i]
@@ -1853,7 +1866,7 @@ function showDayDetail(i,lagHours){
   const fc=hereData.fc;if(!fc||!fc.daily)return;
   const d=fc.daily,date=d.time[i],today=new Date().toISOString().slice(0,10);
   const dn=date===today?'Today':new Date(date+'T12:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
-  const sc=scoreDay({rain:d.precipitation_sum[i],wind:d.windspeed_10m_max[i],pressure:d.surface_pressure_mean?.[i]||1013,hi:d.temperature_2m_max[i],lo:d.temperature_2m_min[i]});
+  const sc=scoreDay({rain:d.precipitation_sum[i],wind:d.windspeed_10m_max[i],gusts:d.windgusts_10m_max?.[i]||0,pressure:d.surface_pressure_mean?.[i]||1013,hi:d.temperature_2m_max[i],lo:d.temperature_2m_min[i]});
   const cls=sc>=7?'g':sc>=4?'c':'n';
   const sunrise=d.sunrise?.[i]?new Date(d.sunrise[i]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
   const sunset=d.sunset?.[i]?new Date(d.sunset[i]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'—';
