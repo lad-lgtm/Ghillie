@@ -6,6 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ghillie">
+<meta name="theme-color" content="#1a2e1f">
+<meta name="description" content="Live river levels, weather and go/no-go fishing conditions for Scottish rivers.">
+<link rel="manifest" href="manifest.json">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Ghillie — Scotland Fishing</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -279,17 +282,25 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 <div id="view-log" class="view">
   <div class="topbar">
     <div class="tr">
-      <div><h1>Log <span class="cc" id="catch-count">0</span></h1><p>Catches · locations · PBs</p></div>
+      <div><h1>Log <span class="cc" id="catch-count">0</span></h1><p>Catches · stats · patterns</p></div>
       <button class="bbtn" style="background:var(--accent);border-color:var(--accent);color:#fff" onclick="showNewCatch()">+ Log</button>
     </div>
   </div>
   <div class="itabs">
     <button class="itab on" id="lt-catches" onclick="switchLogTab('catches')">Catches</button>
-    <button class="itab" id="lt-favlocs" onclick="switchLogTab('favlocs')">Locations ★</button>
-    <button class="itab" id="lt-pb" onclick="switchLogTab('pb')">Personal best</button>
+    <button class="itab" id="lt-stats" onclick="switchLogTab('stats')">Stats</button>
+    <button class="itab" id="lt-patterns" onclick="switchLogTab('patterns')">Patterns</button>
+    <button class="itab" id="lt-pb" onclick="switchLogTab('pb')">PBs</button>
+  </div>
+  <!-- filter bar — shown on catches tab -->
+  <div id="log-filter-bar" style="display:flex;gap:6px;padding:8px 13px 0;flex-shrink:0;overflow-x:auto">
+    <select id="lf-river" onchange="renderCatches()" style="font-size:11px;padding:4px 8px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--fb)"><option value="">All rivers</option></select>
+    <select id="lf-species" onchange="renderCatches()" style="font-size:11px;padding:4px 8px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--fb)"><option value="">All species</option></select>
+    <select id="lf-season" onchange="renderCatches()" style="font-size:11px;padding:4px 8px;border-radius:8px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-family:var(--fb)"><option value="">All seasons</option></select>
   </div>
   <div id="log-catches" style="flex:1;overflow:hidden"></div>
-  <div id="log-favlocs" style="display:none;flex:1;overflow:hidden"></div>
+  <div id="log-stats" style="display:none;flex:1;overflow:hidden"></div>
+  <div id="log-patterns" style="display:none;flex:1;overflow:hidden"></div>
   <div id="log-pb" style="display:none;flex:1;overflow:hidden"></div>
 </div>
 
@@ -1275,7 +1286,23 @@ async function revGeo(lat,lon){try{const r=await fetch(`https://nominatim.openst
 /* VIEW SWITCHING */
 function showView(v){document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));const vEl=document.getElementById('view-'+v);if(!vEl)return;vEl.classList.add('active');document.querySelectorAll('.tb').forEach(e=>e.classList.remove('on'));const t=document.getElementById('tab-'+v);if(t)t.classList.add('on');if(v==='rivers')renderRivers();if(v==='beats'){renderBeats();openMyMap();}if(v==='log')renderLog();if(v==='home')renderHome();}
 function switchHTab(tab){curHTab=tab;['now','forecast','river'].forEach(t=>{const el=document.getElementById('here-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('ht-'+t).classList.toggle('on',t===tab);});if(tab==='river'&&hereData.rv)setTimeout(()=>drawRiverGraph(hereData.rv),150);}
-function switchLogTab(tab){curLogTab=tab;['catches','favlocs','pb'].forEach(t=>{const el=document.getElementById('log-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('lt-'+t).classList.toggle('on',t===tab);});if(tab==='catches')renderCatches();if(tab==='favlocs')renderFavLocs();if(tab==='pb')renderPB();}
+function switchLogTab(tab){
+  curLogTab=tab;
+  const tabs=['catches','stats','patterns','pb'];
+  tabs.forEach(t=>{
+    const el=document.getElementById('log-'+t);
+    el.style.display=t===tab?'flex':'none';
+    if(t===tab){el.style.flexDirection='column';el.style.flex='1';}
+    const btn=document.getElementById('lt-'+t);
+    if(btn)btn.classList.toggle('on',t===tab);
+  });
+  const fb=document.getElementById('log-filter-bar');
+  if(fb)fb.style.display=tab==='catches'?'flex':'none';
+  if(tab==='catches'){populateLogFilters();renderCatches();}
+  if(tab==='stats')renderStats();
+  if(tab==='patterns')renderPatterns();
+  if(tab==='pb')renderPB();
+}
 function openModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
 
@@ -1730,10 +1757,73 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
   <a href="https://www.google.com/maps?q=${gaugeMapLat},${gaugeMapLon}&label=${gaugeLabel}" class="map-g" target="_blank">📍 Google Maps</a>
   <a href="https://maps.apple.com/?ll=${gaugeMapLat},${gaugeMapLon}&q=${gaugeLabel}" class="map-a" target="_blank">🗺 Apple Maps</a>
 </div>
+<div class="lbl">Species on ${river.name}</div>
+${buildSpeciesCards(river,waterTemp)}
 <div class="lbl">Log a catch here</div>
 <button class="bp" onclick='quickLog(${JSON.stringify({name:river.name,lat,lon,sepa:river.sepa||null})})'>+ Log catch at ${river.name}</button>
 <div style="height:10px"></div>`;}
 
+/* Build collapsible species reference cards for a river */
+function buildSpeciesCards(river,waterTemp){
+  const month=new Date().getMonth()+1;
+  // Map river species string to SPECIES_DATA keys
+  const spMap={'Atlantic Salmon':'atlantic_salmon','Salmon':'atlantic_salmon','Sea Trout':'sea_trout','Brown Trout':'brown_trout','Grayling':'grayling','Rainbow Trout':'rainbow_trout','Pike':'pike'};
+  const riverSpecies=(river.species||'').split(',').map(s=>s.trim());
+  const cards=riverSpecies.map(sp=>{
+    const key=spMap[sp];
+    const sd=key?SPECIES_DATA[key]:null;
+    if(!sd)return'';
+    // Is this species in season right now?
+    const inSeason=isSpeciesInSeason(key,month);
+    const tempOk=waterTemp!==null?isWaterTempOk(key,waterTemp):null;
+    const badge=inSeason?`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(74,158,106,.15);border:1px solid rgba(74,158,106,.3);color:var(--al)">In season</span>`:`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--text3)">Out of season</span>`;
+    const tempBadge=tempOk!==null?`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${tempOk?'rgba(74,158,106,.1)':'rgba(100,100,120,.1)'};border:1px solid ${tempOk?'rgba(74,158,106,.25)':'var(--border2)'};color:${tempOk?'var(--al)':'var(--text3)'}">${tempOk?'Good water temp':'Cold for this species'}</span>`:'';
+    const id=`sp-${key}-${river.name.replace(/\s/g,'')}`;
+    return`<div style="border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:7px">
+  <div onclick="toggleSpeciesCard('${id}')" style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:var(--surface)">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div style="width:10px;height:10px;border-radius:50%;background:${sd.color};flex-shrink:0"></div>
+      <span style="font-size:13px;font-weight:500;color:var(--text)">${sd.name}</span>
+      ${badge}${tempBadge?` ${tempBadge}`:''}
+    </div>
+    <span id="${id}-arr" style="font-size:11px;color:var(--text3)">▼</span>
+  </div>
+  <div id="${id}" style="display:none;padding:11px 13px;border-top:1px solid var(--border);background:var(--bg2)">
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">${sd.desc}</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Season: ${sd.season} · Best: ${sd.bestMonths}</div>
+    ${sd.tactics.map(t=>`<div class="tr2"><span class="tk">${t.k}</span><span class="tv" style="max-width:60%;text-align:right;font-size:11px">${t.v}</span></div>`).join('')}
+  </div>
+</div>`;
+  }).join('');
+  return cards||`<div style="font-size:12px;color:var(--text3)">No species data for this river.</div>`;
+}
+
+function toggleSpeciesCard(id){
+  const el=document.getElementById(id);
+  const arr=document.getElementById(id+'-arr');
+  if(!el)return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(arr)arr.textContent=open?'▼':'▲';
+}
+
+function isSpeciesInSeason(key,month){
+  const seasons={
+    atlantic_salmon:[2,3,4,5,6,7,8,9,10],
+    sea_trout:[5,6,7,8,9],
+    brown_trout:[3,4,5,6,7,8,9,10],
+    grayling:[10,11,12,1,2],
+    rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],
+    pike:[10,11,12,1,2,3]
+  };
+  return(seasons[key]||[]).includes(month);
+}
+
+function isWaterTempOk(key,temp){
+  const ranges={atlantic_salmon:[6,18],sea_trout:[10,18],brown_trout:[8,18],grayling:[2,12],rainbow_trout:[6,18],pike:[4,16]};
+  const r=ranges[key];
+  return r?temp>=r[0]&&temp<=r[1]:null;
+}
 /* HOURLY SECTION */
 function buildHourly(h){
   const now=new Date();
@@ -2372,15 +2462,148 @@ function renderBeats(){
 /* LOG */
 function renderLog(){
   document.getElementById('catch-count').textContent=catches.length;
-  ['catches','favlocs','pb'].forEach(t=>{const el=document.getElementById('log-'+t);el.style.display=t===curLogTab?'flex':'none';if(t===curLogTab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('lt-'+t).classList.toggle('on',t===curLogTab);});
-  if(curLogTab==='catches')renderCatches();if(curLogTab==='favlocs')renderFavLocs();if(curLogTab==='pb')renderPB();
+  switchLogTab(curLogTab);
+}
+
+function populateLogFilters(){
+  const rivers=[...new Set(catches.map(c=>c.river))].sort();
+  const species=[...new Set(catches.map(c=>c.species))].sort();
+  const years=[...new Set(catches.map(c=>new Date(c.timestamp).getFullYear()))].sort((a,b)=>b-a);
+  const rSel=document.getElementById('lf-river');
+  const spSel=document.getElementById('lf-species');
+  const seaSel=document.getElementById('lf-season');
+  if(!rSel)return;
+  const cur=[rSel.value,spSel.value,seaSel.value];
+  rSel.innerHTML=`<option value="">All rivers</option>`+rivers.map(r=>`<option value="${r}">${r}</option>`).join('');
+  spSel.innerHTML=`<option value="">All species</option>`+species.map(s=>`<option value="${s}">${s}</option>`).join('');
+  seaSel.innerHTML=`<option value="">All seasons</option>`+years.map(y=>`<option value="${y}">Season ${y}</option>`).join('');
+  rSel.value=cur[0];spSel.value=cur[1];seaSel.value=cur[2];
+}
+
+function getFilteredCatches(){
+  const river=document.getElementById('lf-river')?.value||'';
+  const species=document.getElementById('lf-species')?.value||'';
+  const season=document.getElementById('lf-season')?.value||'';
+  return catches.filter(c=>
+    (!river||c.river===river)&&
+    (!species||c.species===species)&&
+    (!season||new Date(c.timestamp).getFullYear()===parseInt(season))
+  );
 }
 
 function renderCatches(){
   const el=document.getElementById('log-catches');
   el.style.flex='1';el.style.display='flex';el.style.flexDirection='column';
-  if(catches.length===0){el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:40px 20px;text-align:center"><div style="font-size:38px">🎣</div><div style="font-size:14px;font-weight:500;color:var(--text)">No catches yet</div><div style="font-size:12px;color:var(--text3)">Tap "+ Log" to record your first fish</div><button class="bp" style="width:auto;padding:9px 22px;margin-top:7px" onclick="showNewCatch()">Log first catch</button></div>`;return;}
-  el.innerHTML=`<div class="scroll" style="flex:1">${[...catches].reverse().map(c=>catchCard(c)).join('')}</div>`;
+  if(catches.length===0){
+    el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:40px 20px;text-align:center"><div style="font-size:38px">🎣</div><div style="font-size:14px;font-weight:500;color:var(--text)">No catches yet</div><div style="font-size:12px;color:var(--text3)">Tap "+ Log" to record your first fish</div><button class="bp" style="width:auto;padding:9px 22px;margin-top:7px" onclick="showNewCatch()">Log first catch</button></div>`;
+    return;
+  }
+  const filtered=getFilteredCatches();
+  const noMatch=filtered.length===0?`<div style="padding:30px;text-align:center;font-size:12px;color:var(--text3)">No catches match the current filters</div>`:'';
+  el.innerHTML=`<div class="scroll" style="flex:1">${noMatch}${[...filtered].reverse().map(c=>catchCard(c)).join('')}</div>`;
+}
+
+function renderStats(){
+  const el=document.getElementById('log-stats');
+  el.style.flex='1';el.style.display='flex';el.style.flexDirection='column';
+  if(catches.length===0){el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:40px 20px;text-align:center"><div style="font-size:38px">📊</div><div style="font-size:14px;font-weight:500;color:var(--text)">No data yet</div><div style="font-size:12px;color:var(--text3)">Log some catches to see statistics</div></div>`;return;}
+  const now=new Date();
+  const thisYear=now.getFullYear();
+  const thisYearCatches=catches.filter(c=>new Date(c.timestamp).getFullYear()===thisYear);
+  const released=catches.filter(c=>c.released).length;
+  const withWeight=catches.filter(c=>c.weight);
+  const avgWeight=withWeight.length?( withWeight.reduce((s,c)=>s+parseFloat(c.weight),0)/withWeight.length).toFixed(1):null;
+  // By river
+  const byRiver={};catches.forEach(c=>{byRiver[c.river]=(byRiver[c.river]||0)+1;});
+  const topRivers=Object.entries(byRiver).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  // By species
+  const bySpecies={};catches.forEach(c=>{bySpecies[c.species]=(bySpecies[c.species]||0)+1;});
+  const topSpecies=Object.entries(bySpecies).sort((a,b)=>b[1]-a[1]);
+  // By month
+  const byMonth=Array(12).fill(0);catches.forEach(c=>byMonth[new Date(c.timestamp).getMonth()]++);
+  const months=['J','F','M','A','M','J','J','A','S','O','N','D'];
+  const maxMonth=Math.max(...byMonth)||1;
+
+  el.innerHTML=`<div class="scroll" style="flex:1;padding:13px;display:flex;flex-direction:column;gap:13px">
+<div class="lbl">Season ${thisYear}</div>
+<div class="g4">
+  <div class="met"><div class="mv" style="color:var(--al)">${thisYearCatches.length}</div><div class="ml">This season</div></div>
+  <div class="met"><div class="mv">${catches.length}</div><div class="ml">All time</div></div>
+  <div class="met"><div class="mv" style="color:var(--al)">${Math.round(released/Math.max(catches.length,1)*100)}%</div><div class="ml">Released</div></div>
+  <div class="met"><div class="mv">${avgWeight||'—'}${avgWeight?' lbs':''}</div><div class="ml">Avg weight</div></div>
+</div>
+<div class="lbl">Catches by month</div>
+<div class="cf" style="padding:10px 0">
+  <div style="display:flex;align-items:flex-end;gap:4px;height:48px">
+    ${byMonth.map((n,i)=>`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px">
+      <div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:${Math.round((n/maxMonth)*44)}px;min-height:${n>0?2:0}px;opacity:${new Date().getMonth()===i?1:.7}"></div>
+      <div style="font-size:8px;color:var(--text3)">${months[i]}</div>
+    </div>`).join('')}
+  </div>
+</div>
+<div class="lbl">Top rivers</div>
+<div class="cf">${topRivers.map(([r,n])=>`<div class="tr2"><span class="tk">${r}</span><span class="tv">${n} catch${n>1?'es':''}</span></div>`).join('')}</div>
+<div class="lbl">By species</div>
+<div class="cf">${topSpecies.map(([s,n])=>`<div class="tr2"><span class="tk">${s}</span><span class="tv">${n} catch${n>1?'es':''}</span></div>`).join('')}</div>
+<div style="height:10px"></div>
+</div>`;
+}
+
+function renderPatterns(){
+  const el=document.getElementById('log-patterns');
+  el.style.flex='1';el.style.display='flex';el.style.flexDirection='column';
+  const withLevel=catches.filter(c=>c.river_level&&c.weight);
+  const withPressure=catches.filter(c=>c.pressure&&c.weight);
+  const withTime=catches.filter(c=>c.timestamp);
+  if(catches.length<3){el.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;gap:9px;padding:40px 20px;text-align:center"><div style="font-size:38px">📈</div><div style="font-size:14px;font-weight:500;color:var(--text)">Not enough data yet</div><div style="font-size:12px;color:var(--text3)">Log at least 3 catches to start seeing patterns</div></div>`;return;}
+
+  // Best time of day
+  const hourBuckets={'Dawn (4–7h)':[],'Morning (7–10h)':[],'Midday (10–14h)':[],'Afternoon (14–17h)':[],'Evening (17–21h)':[],'Night (21–4h)':[]};
+  withTime.forEach(c=>{
+    const h=new Date(c.timestamp).getHours();
+    const bucket=h>=4&&h<7?'Dawn (4–7h)':h>=7&&h<10?'Morning (7–10h)':h>=10&&h<14?'Midday (10–14h)':h>=14&&h<17?'Afternoon (14–17h)':h>=17&&h<21?'Evening (17–21h)':'Night (21–4h)';
+    hourBuckets[bucket].push(c);
+  });
+  const bestTime=Object.entries(hourBuckets).sort((a,b)=>b[1].length-a[1].length)[0];
+
+  // River level bands
+  const levelBands={'Very low (<10%)':[],'Ideal (10–35%)':[],'High (35–60%)':[],'Very high (>60%)':[]};
+  withLevel.forEach(c=>{
+    const lv=parseFloat(c.river_level);
+    // Use a rough 2m as nMax if we don't know — just for pattern insight
+    const pct=lv/2;
+    const band=pct<0.1?'Very low (<10%)':pct<0.35?'Ideal (10–35%)':pct<0.6?'High (35–60%)':'Very high (>60%)';
+    levelBands[band].push(c);
+  });
+  const bestLevel=Object.entries(levelBands).filter(([,v])=>v.length>0).sort((a,b)=>b[1].length-a[1].length)[0];
+
+  // Pressure bands
+  const pressBands={'Low (<1000hPa)':[],'Normal (1000–1015)':[],'High (>1015)':[]};
+  withPressure.forEach(c=>{
+    const p=c.pressure;
+    const band=p<1000?'Low (<1000hPa)':p<=1015?'Normal (1000–1015)':'High (>1015)';
+    pressBands[band].push(c);
+  });
+  const bestPress=Object.entries(pressBands).filter(([,v])=>v.length>0).sort((a,b)=>b[1].length-a[1].length)[0];
+
+  // Best fly
+  const flies={};catches.filter(c=>c.fly).forEach(c=>{flies[c.fly]=(flies[c.fly]||0)+1;});
+  const topFlies=Object.entries(flies).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+  el.innerHTML=`<div class="scroll" style="flex:1;padding:13px;display:flex;flex-direction:column;gap:13px">
+<div class="lbl">Your patterns — based on ${catches.length} catches</div>
+<div class="card" style="display:flex;flex-direction:column;gap:10px">
+  ${bestTime?`<div class="tr2"><span class="tk">🕐 Best time of day</span><span class="tv" style="color:var(--al)">${bestTime[0]}</span></div><div style="font-size:10px;color:var(--text3);margin-top:-4px">${bestTime[1].length} of your catches</div>`:'' }
+  ${bestLevel&&withLevel.length>=2?`<div class="tr2" style="margin-top:4px"><span class="tk">🌊 Best river level</span><span class="tv" style="color:var(--al)">${bestLevel[0]}</span></div><div style="font-size:10px;color:var(--text3);margin-top:-4px">${bestLevel[1].length} catches logged at this range</div>`:''}
+  ${bestPress&&withPressure.length>=2?`<div class="tr2" style="margin-top:4px"><span class="tk">🔵 Best pressure</span><span class="tv" style="color:var(--al)">${bestPress[0]}</span></div><div style="font-size:10px;color:var(--text3);margin-top:-4px">${bestPress[1].length} catches at this pressure</div>`:''}
+</div>
+${topFlies.length?`<div class="lbl">Most successful flies/lures</div><div class="cf">${topFlies.map(([f,n],i)=>`<div class="tr2"><span class="tk">${i===0?'🥇':i===1?'🥈':'🥉'} ${f}</span><span class="tv">${n} catch${n>1?'es':''}</span></div>`).join('')}</div>`:''}
+${withTime.length>=5?`<div class="lbl">Best months for you</div><div class="cf">${Object.entries(
+  withTime.reduce((acc,c)=>{const m=new Date(c.timestamp).toLocaleString('en-GB',{month:'long'});acc[m]=(acc[m]||0)+1;return acc;},{})
+).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([m,n])=>`<div class="tr2"><span class="tk">${m}</span><span class="tv">${n} catch${n>1?'es':''}</span></div>`).join('')}</div>`:''}
+<div style="font-size:10px;color:var(--text3);padding:4px 0;line-height:1.6">Patterns improve as you log more catches. The more data, the more reliable the insights.</div>
+<div style="height:10px"></div>
+</div>`;
 }
 
 function catchCard(c){
@@ -2464,8 +2687,11 @@ setInterval(tick,30000);tick();
 
 /* INIT */
 renderHome();renderBeats();
-// Apply saved units preference to toggle UI
 setUnits(useMetric);
+// Register service worker for PWA offline support
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
 </script>
 </body>
 </html>
