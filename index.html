@@ -1121,7 +1121,7 @@ async function revGeo(lat,lon){try{const r=await fetch(`https://nominatim.openst
 
 /* VIEW SWITCHING */
 function showView(v){document.querySelectorAll('.view').forEach(e=>e.classList.remove('active'));const vEl=document.getElementById('view-'+v);if(!vEl)return;vEl.classList.add('active');document.querySelectorAll('.tb').forEach(e=>e.classList.remove('on'));const t=document.getElementById('tab-'+v);if(t)t.classList.add('on');if(v==='rivers')renderRivers();if(v==='beats'){renderBeats();openMyMap();}if(v==='log')renderLog();if(v==='home')renderHome();}
-function switchHTab(tab){curHTab=tab;['now','forecast','river'].forEach(t=>{const el=document.getElementById('here-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('ht-'+t).classList.toggle('on',t===tab);});if(tab==='river'&&hereData.rv)setTimeout(()=>drawRiverGraph(hereData.rv),80);}
+function switchHTab(tab){curHTab=tab;['now','forecast','river'].forEach(t=>{const el=document.getElementById('here-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('ht-'+t).classList.toggle('on',t===tab);});if(tab==='river'&&hereData.rv)setTimeout(()=>drawRiverGraph(hereData.rv),150);}
 function switchLogTab(tab){curLogTab=tab;['catches','favlocs','pb'].forEach(t=>{const el=document.getElementById('log-'+t);el.style.display=t===tab?'flex':'none';if(t===tab){el.style.flexDirection='column';el.style.flex='1';}document.getElementById('lt-'+t).classList.toggle('on',t===tab);});if(tab==='catches')renderCatches();if(tab==='favlocs')renderFavLocs();if(tab==='pb')renderPB();}
 function openModal(id){document.getElementById(id).classList.add('show');}
 function closeModal(id){document.getElementById(id).classList.remove('show');}
@@ -1783,28 +1783,38 @@ function renderRiverTab(rv,river,st){
   const catchStations=catKey&&CATCHMENTS[catKey]?CATCHMENTS[catKey]:[];
 
   if(!rv||!rv.history||rv.history.length<2){
-    const noDataHTML=`<div class="card"><div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">Live graph unavailable</div><div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:10px">SEPA data could not be loaded. Use the official link below.</div>${sepaLink(st)}</div>`;
-    el.innerHTML=`<div class="scroll" style="display:flex;flex-direction:column;gap:11px;flex:1"><div class="lbl">${st?.gauge||river.name}</div>${noDataHTML}${catchStations.length>1?'<div id="catchment-snapshot"></div>':''}<div style="height:10px"></div></div>`;
+    el.innerHTML=`
+<div style="padding:13px;display:flex;flex-direction:column;gap:11px">
+  <div class="lbl">${st?.gauge||river.name}</div>
+  <div class="card"><div style="font-size:13px;font-weight:500;color:var(--text);margin-bottom:8px">Live graph unavailable</div><div style="font-size:12px;color:var(--text3);line-height:1.6;margin-bottom:10px">SEPA data could not be loaded. Use the official link below.</div>${sepaLink(st)}</div>
+  ${catchStations.length>1?'<div id="catchment-snapshot"></div>':''}
+  ${lvGuide()}
+  <div style="height:10px"></div>
+</div>`;
     if(catchStations.length>1)loadCatchmentSnapshot(catchStations,river,st);
     return;
   }
 
   const unitLabel=useMetric?'m':'ft';
-  el.innerHTML=`<div class="scroll" style="display:flex;flex-direction:column;gap:11px;flex:1">
-<div class="lbl">${rv.gauge||river.name} — 48h level</div>
-<div class="gw">
-  <canvas id="river-canvas" class="gc" height="150"></canvas>
-  <div class="gl" id="rlabels"></div>
-  <div style="display:flex;gap:12px;margin-top:7px;flex-wrap:wrap">
-    <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Height (${unitLabel})</div>
-    <div style="margin-left:auto;font-size:10px;color:var(--text3)">Now: ${fmtLevel(rv.level)} · ${rv.trend}</div>
+  el.innerHTML=`
+<div style="padding:13px;display:flex;flex-direction:column;gap:11px">
+  <div class="lbl">${rv.gauge||river.name} — 48h level</div>
+  <div class="gw">
+    <canvas id="river-canvas" class="gc" height="150"></canvas>
+    <div class="gl" id="rlabels"></div>
+    <div style="display:flex;gap:12px;margin-top:7px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:var(--text3)"><div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>Height (${unitLabel})</div>
+      <div style="margin-left:auto;font-size:10px;color:var(--text3)">Now: ${fmtLevel(rv.level)} · ${rv.trend}</div>
+    </div>
   </div>
-</div>
-${sepaLink(st)}${lvGuide()}
-${catchStations.length>1?`<div class="lbl" style="margin-top:3px">All stations on ${river.name}</div><div id="catchment-snapshot"><div class="lw" style="padding:20px 0"><div class="spinner"></div></div></div>`:''}
-<div style="height:10px"></div></div>`;
+  ${sepaLink(st)}
+  ${catchStations.length>1?`<div class="lbl" style="margin-top:3px">All stations on ${river.name}</div><div id="catchment-snapshot"><div class="lw" style="padding:20px 0"><div class="spinner"></div></div></div>`:''}
+  ${lvGuide()}
+  <div style="height:10px"></div>
+</div>`;
 
-  setTimeout(()=>drawRiverGraph(rv),80);
+  // Delay slightly longer to let layout settle before measuring canvas width
+  setTimeout(()=>drawRiverGraph(rv),150);
   if(catchStations.length>1)loadCatchmentSnapshot(catchStations,river,st);
 }
 
