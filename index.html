@@ -184,6 +184,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
     <div class="ut-track"><div class="ut-knob"></div></div>
     <span class="ut-i">°F</span>
   </div>
+  <button onclick="shareApp()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:15px;padding:2px 4px;line-height:1" title="Share Ghillie">⬆</button>
 <span>GPS</span></div>
 <div class="offline-bar" id="offline-bar">
   <span id="offline-msg">📵 Offline — showing cached data</span>
@@ -312,12 +313,13 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
   </div>
   <div id="map-container" style="flex:1;position:relative;min-height:0">
     <div id="leaflet-map" style="width:100%;height:100%"></div>
-    <!-- tap to place banner — shown when picking a pin location -->
-    <div id="map-tap-banner" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:1000;background:rgba(74,158,106,.95);color:#fff;font-size:13px;font-weight:500;padding:10px 18px;border-radius:22px;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.3);pointer-events:none">
-      Tap the map to place your pin
+    <!-- pin placement overlay — covers map, intercepts taps directly -->
+    <div id="map-place-overlay" style="display:none;position:absolute;inset:0;z-index:2000;cursor:crosshair;background:rgba(74,158,106,.08);border:2px solid rgba(74,158,106,.4)">
+      <div style="position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(74,158,106,.95);color:#fff;font-size:13px;font-weight:500;padding:10px 18px;border-radius:22px;white-space:nowrap;box-shadow:0 2px 12px rgba(0,0,0,.3);pointer-events:none">
+        Tap anywhere to place your pin
+      </div>
+      <button onclick="cancelPinPlace()" style="position:absolute;bottom:70px;left:50%;transform:translateX(-50%);background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:20px;padding:9px 20px;font-size:13px;font-weight:500;color:#333;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)">✕ Cancel</button>
     </div>
-    <!-- cancel placing button -->
-    <button id="map-place-cancel" onclick="cancelPinPlace()" style="display:none;position:absolute;bottom:70px;left:50%;transform:translateX(-50%);z-index:1000;background:#fff;border:1px solid rgba(0,0,0,.15);border-radius:20px;padding:9px 20px;font-size:13px;font-weight:500;color:#333;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.2)">✕ Cancel</button>
     <!-- current location button -->
     <button onclick="mapGoToMyLocation()" title="My location" style="position:absolute;bottom:16px;right:12px;z-index:1000;width:40px;height:40px;border-radius:50%;background:#fff;border:1px solid rgba(0,0,0,.15);box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center">📍</button>
     <!-- empty state overlay -->
@@ -576,43 +578,66 @@ const SEPA={
 };
 const CATCHMENTS={
   tay:[
-    {label:'Tay at Caputh',     stId:'14936', tsId:'55189010',nMax:3.238,glat:56.5389,glon:-3.5139},
-    {label:'Tay at Pitnacree',  stId:'14935', tsId:'55173010',nMax:2.846,glat:56.7028,glon:-3.7667},
-    {label:'Tay at Ballathie',  stId:'14937', tsId:'55205010',nMax:4.338,glat:56.5111,glon:-3.4500},
-    {label:'Tay at Perth',      stId:'10048', tsId:null,       nMax:3.5,  glat:56.3939,glon:-3.4333},
-    {label:'Tay at Kenmore',    stId:'8295',  tsId:'61525010',nMax:1.956,glat:56.5944,glon:-3.9944},
-    {label:'Tummel at Pitlochry',stId:'14963',tsId:'55554010',nMax:3.065,glat:56.7028,glon:-3.7333,lag:8},
+    // Main Tay gauges — upstream to downstream
+    {label:'Tay at Kenmore',      stId:'8295',  tsId:'61525010',nMax:1.956,glat:56.5944,glon:-3.9944},
+    {label:'Tay at Pitnacree',    stId:'14935', tsId:'55173010',nMax:2.846,glat:56.7028,glon:-3.7667},
+    {label:'Tay at Caputh',       stId:'14936', tsId:'55189010',nMax:3.238,glat:56.5389,glon:-3.5139},
+    {label:'Tay at Ballathie',    stId:'14937', tsId:'55205010',nMax:4.338,glat:56.5111,glon:-3.4500},
+    {label:'Tay at Perth',        stId:'10048', tsId:null,       nMax:3.5,  glat:56.3939,glon:-3.4333},
+    // Key tributaries that affect main Tay levels
+    {label:'Tummel at Pitlochry', stId:'14963', tsId:'55554010',nMax:3.065,glat:56.7028,glon:-3.7333,lag:8,  tributary:true,river:'River Tummel'},
+    {label:'Lyon at Comrie Bridge',stId:'14951',tsId:null,       nMax:2.0,  glat:56.6000,glon:-4.0167,lag:6,  tributary:true,river:'River Lyon'},
+    {label:'Dochart at Killin',   stId:'14933', tsId:null,       nMax:1.8,  glat:56.4694,glon:-4.3194,lag:12, tributary:true,river:'River Dochart'},
+    {label:'Earn at Forteviot',   stId:'14970', tsId:'55685010',nMax:2.793,glat:56.3208,glon:-3.4556,lag:18, tributary:true,river:'River Earn'},
+    {label:'Almond at Almondbank',stId:'14960', tsId:null,       nMax:2.0,  glat:56.4167,glon:-3.5167,lag:6,  tributary:true,river:'River Almond'},
+    {label:'Isla at Forter',      stId:'14932', tsId:null,       nMax:1.5,  glat:56.6667,glon:-3.1833,lag:8,  tributary:true,river:'River Isla'},
   ],
   spey:[
-    {label:'Spey at Invertruim',    stId:'234248',tsId:'57677010',nMax:1.827,glat:57.0556,glon:-4.0861,lag:6},
-    {label:'Spey at Kincraig',      stId:'234254',tsId:'57775010',nMax:2.119,glat:57.0822,glon:-3.9722},
-    {label:'Spey at Boat of Garten',stId:'234168',tsId:'56932010',nMax:2.869,glat:57.2500,glon:-3.7028},
-    {label:'Spey at Grantown',      stId:'234229',tsId:'57507010',nMax:2.089,glat:57.3278,glon:-3.5944},
+    // Main Spey gauges — upstream to downstream
+    {label:'Spey at Invertruim',      stId:'234248',tsId:'57677010',nMax:1.827,glat:57.0556,glon:-4.0861,lag:6},
+    {label:'Spey at Kincraig',        stId:'234254',tsId:'57775010',nMax:2.119,glat:57.0822,glon:-3.9722},
+    {label:'Spey at Boat of Garten',  stId:'234168',tsId:'56932010',nMax:2.869,glat:57.2500,glon:-3.7028},
+    {label:'Spey at Grantown',        stId:'234229',tsId:'57507010',nMax:2.089,glat:57.3278,glon:-3.5944},
+    // Key Spey tributaries
+    {label:'Dulnain at Balnaan',      stId:'234163',tsId:null,      nMax:1.8,  glat:57.2833,glon:-3.7500,lag:4, tributary:true,river:'River Dulnain'},
+    {label:'Avon at Delnashaugh',     stId:'234272',tsId:null,      nMax:2.0,  glat:57.3667,glon:-3.3833,lag:4, tributary:true,river:'River Avon'},
+    {label:'Livet at Minmore',        stId:'234279',tsId:null,      nMax:1.5,  glat:57.3833,glon:-3.3167,lag:3, tributary:true,river:'River Livet'},
   ],
   tweed:[
-    {label:'Tweed at Lyne Ford',  stId:'14973',tsId:'55733010',nMax:2.586,glat:55.6389,glon:-3.3833,lag:6},
-    {label:'Tweed at Peebles',    stId:'14979',tsId:'55822010',nMax:2.577,glat:55.6528,glon:-3.1944},
-    {label:'Tweed at Melrose',    stId:'14980',tsId:null,       nMax:2.8,  glat:55.5944,glon:-2.7194},
-    {label:'Tweed at Coldstream', stId:'14982',tsId:null,       nMax:3.2,  glat:55.6472,glon:-2.2472},
-    {label:'Tweed at Norham',     stId:'9514', tsId:'61557010',nMax:4.724,glat:55.7167,glon:-2.1500},
+    // Main Tweed gauges — upstream to downstream
+    {label:'Tweed at Lyne Ford',   stId:'14973',tsId:'55733010',nMax:2.586,glat:55.6389,glon:-3.3833,lag:6},
+    {label:'Tweed at Peebles',     stId:'14979',tsId:'55822010',nMax:2.577,glat:55.6528,glon:-3.1944},
+    {label:'Tweed at Melrose',     stId:'14980',tsId:null,       nMax:2.8,  glat:55.5944,glon:-2.7194},
+    {label:'Tweed at Coldstream',  stId:'14982',tsId:null,       nMax:3.2,  glat:55.6472,glon:-2.2472},
+    {label:'Tweed at Norham',      stId:'9514', tsId:'61557010',nMax:4.724,glat:55.7167,glon:-2.1500},
+    // Key Tweed tributaries — these run off quickly and signal rises to the main river
+    {label:'Ettrick at Lindean',   stId:'14990',tsId:null,       nMax:2.29, glat:55.5722,glon:-2.8889,lag:4, tributary:true,river:'Ettrick Water'},
+    {label:'Yarrow at Philiphaugh',stId:'14985',tsId:null,       nMax:1.8,  glat:55.5378,glon:-2.9556,lag:3, tributary:true,river:'Yarrow Water'},
+    {label:'Teviot at Hawick',     stId:'15001',tsId:null,       nMax:2.5,  glat:55.4167,glon:-2.7833,lag:6, tributary:true,river:'River Teviot'},
+    {label:'Gala Water at Galashiels',stId:'9683',tsId:null,     nMax:2.0,  glat:55.6139,glon:-2.8028,lag:3, tributary:true,river:'Gala Water'},
+    {label:'Leader at Earlston',   stId:'14988',tsId:null,       nMax:1.9,  glat:55.6500,glon:-2.6667,lag:3, tributary:true,river:'Leader Water'},
   ],
   dee_ab:[
-    {label:'Dee at Polhollick',stId:'234490',tsId:null,nMax:2.0,glat:57.0483,glon:-3.1167},
-    {label:'Dee at Banchory',  stId:'234491',tsId:null,nMax:1.8,glat:57.0528,glon:-2.4972},
-    {label:'Dee at Woodend',   stId:'234492',tsId:null,nMax:2.5,glat:57.0056,glon:-2.1444},
+    // Main Dee gauges — upstream to downstream
+    {label:'Dee at Polhollick',    stId:'234294',tsId:null,nMax:2.07,glat:57.0483,glon:-3.1167},
+    {label:'Dee at Banchory',      stId:'234491',tsId:null,nMax:1.8, glat:57.0528,glon:-2.4972},
+    {label:'Dee at Woodend',       stId:'234492',tsId:null,nMax:2.5, glat:57.0056,glon:-2.1444},
+    // Key Dee tributaries
+    {label:'Muick at Invermuick',  stId:'234247',tsId:null,nMax:1.5, glat:56.9667,glon:-3.0833,lag:3, tributary:true,river:'River Muick'},
+    {label:'Feugh at Heugh Head',  stId:'234237',tsId:null,nMax:1.8, glat:57.0667,glon:-2.5833,lag:3, tributary:true,river:'Water of Feugh'},
   ],
   clyde:[
-    {label:'Clyde at Abington', stId:'322551',tsId:'58616010',nMax:2.214,glat:55.5028,glon:-3.6972,lag:6},
-    {label:'Clyde at Hazelbank',stId:'133094',tsId:'53077010',nMax:2.554,glat:55.6611,glon:-3.8528},
-    {label:'Clyde at Daldowie', stId:'133074',tsId:'52849010',nMax:3.567,glat:55.8278,glon:-4.1056},
-    {label:'Kelvin at Dryfield',stId:'133080',tsId:'52906010',nMax:3.821,glat:55.8750,glon:-4.2444},
+    {label:'Clyde at Abington',  stId:'322551',tsId:'58616010',nMax:2.214,glat:55.5028,glon:-3.6972,lag:6},
+    {label:'Clyde at Hazelbank', stId:'133094',tsId:'53077010',nMax:2.554,glat:55.6611,glon:-3.8528},
+    {label:'Clyde at Daldowie',  stId:'133074',tsId:'52849010',nMax:3.567,glat:55.8278,glon:-4.1056},
+    {label:'Kelvin at Dryfield', stId:'133080',tsId:'52906010',nMax:3.821,glat:55.8750,glon:-4.2444,tributary:true,river:'River Kelvin'},
   ],
   earn:[
-    {label:'Earn at Forteviot', stId:'14970', tsId:'55685010',nMax:2.793,glat:56.3208,glon:-3.4556},
+    {label:'Earn at Forteviot',  stId:'14970', tsId:'55685010',nMax:2.793,glat:56.3208,glon:-3.4556},
   ],
   annan:[
-    {label:'Annan at Woodfoot',   stId:'133143',tsId:null,nMax:2.5,glat:55.1528,glon:-3.2639},
-    {label:'Annan at Brydekirk',  stId:'133144',tsId:null,nMax:3.0,glat:55.0278,glon:-3.3417},
+    {label:'Annan at Woodfoot',  stId:'133143',tsId:null,nMax:2.5,glat:55.1528,glon:-3.2639},
+    {label:'Annan at Brydekirk', stId:'133144',tsId:null,nMax:3.0,glat:55.0278,glon:-3.3417},
   ],
 };
 
@@ -1024,6 +1049,20 @@ function fmtRvTime(ts){
   try{const d=new Date(ts.replace(' ','T'));return d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})+' '+d.toLocaleDateString('en-GB',{day:'numeric',month:'short'});}catch(e){return ts;}
 }
 function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
+async function shareApp(){
+  const url=window.location.href.split('?')[0]; // clean URL without params
+  const text='Check out Ghillie — live river levels & fishing conditions for Scotland 🎣';
+  if(navigator.share){
+    try{await navigator.share({title:'Ghillie — Scotland Fishing',text,url});return;}catch(e){}
+  }
+  // Fallback — copy to clipboard
+  try{
+    await navigator.clipboard.writeText(url);
+    toast('Link copied to clipboard ✓');
+  }catch(e){
+    toast('URL: '+url);
+  }
+}
 function sv(){localStorage.setItem('g_catches',JSON.stringify(catches));localStorage.setItem('g_favrivers',JSON.stringify(favRivers));localStorage.setItem('g_favlocs',JSON.stringify(favLocs));}
 function wxI(c){return WXI[c]||'🌡️';}
 function curSp(){const m=new Date().getMonth();if(m>=9||m<=1)return'grayling';if(m>=4&&m<=7)return'sea_trout';if(m>=2&&m<=4)return'brown_trout';return'atlantic_salmon';}
@@ -1146,6 +1185,9 @@ function sepaLink(st){if(!st)return'';return `<a href="https://waterlevels.sepa.
 function lvGuide(){return`<div class="lbl">Level interpretation guide</div><div class="cf"><div class="tr2"><span class="tk">Below 10% of normal range</span><span class="tv" style="color:var(--ambl)">Very low</span></div><div class="tr2"><span class="tk">10–50% of normal range</span><span class="tv" style="color:var(--al)">Ideal — fish freely</span></div><div class="tr2"><span class="tk">50–100% of normal range</span><span class="tv" style="color:var(--ambl)">High — wade carefully</span></div><div class="tr2"><span class="tk">Above normal maximum</span><span class="tv" style="color:var(--redl)">Flood — no go</span></div></div>`;}
 
 /* CORS PROXY & APIs */
+/* ── Set this to your Cloudflare Worker URL once deployed ── */
+const WORKER_URL = 'https://ghillie-sepa.lad-383.workers.dev'; // e.g. 'https://ghillie-sepa-proxy.yourname.workers.dev'
+
 /* Try direct fetch first (SEPA may allow it), then race proxies */
 const PROXIES=[
   u=>`https://corsproxy.io/?${encodeURIComponent(u)}`,
@@ -1154,6 +1196,17 @@ const PROXIES=[
   u=>`https://thingproxy.freeboard.io/fetch/${u}`,
 ];
 async function proxyFetch(url){
+  // If Worker is configured, use it — fastest and most reliable
+  if(WORKER_URL){
+    try{
+      // Extract ts_id from URL and hit the Worker /levels endpoint
+      const tsMatch=url.match(/ts_id=(\d+)/);
+      if(tsMatch){
+        const r=await fetch(`${WORKER_URL}/levels?ts_id=${tsMatch[1]}`,{signal:AbortSignal.timeout(6000)});
+        if(r.ok)return r.json();
+      }
+    }catch(e){}
+  }
   // First: try direct (works if server sends CORS headers)
   try{
     const r=await fetch(url,{signal:AbortSignal.timeout(4000),mode:'cors'});
@@ -1180,10 +1233,15 @@ async function discoverTsId(stId){
   const cached=localStorage.getItem(lsKey);
   if(cached){_tsIdCache[stId]=cached;return cached;}
   try{
-    const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesList&format=json&station_no=${stId}&stationparameter_name=Stage&returnfields=ts_id,ts_name`;
-    const data=await proxyFetch(url);
+    let data=null;
+    if(WORKER_URL){
+      try{const r=await fetch(`${WORKER_URL}/discover?station_no=${stId}`,{signal:AbortSignal.timeout(6000)});if(r.ok)data=await r.json();}catch(e){}
+    }
+    if(!data){
+      const url=`https://timeseries.sepa.org.uk/KiWIS/KiWIS?service=kisters&type=queryServices&datasource=0&request=getTimeseriesList&format=json&station_no=${stId}&stationparameter_name=Stage&returnfields=ts_id,station_no,station_name,ts_name`;
+      data=await proxyFetch(url);
+    }
     if(data&&Array.isArray(data)&&data.length>0){
-      // Prefer ts_name containing 'Mean' or 'Cmd' (15-min mean), fall back to first
       const preferred=data.find(d=>d.ts_name&&(d.ts_name.includes('Mean')||d.ts_name.includes('Cmd')))||data[0];
       const tsId=String(preferred.ts_id);
       _tsIdCache[stId]=tsId;
@@ -1982,35 +2040,57 @@ function drawRiverGraph(rv){
 
 async function loadCatchmentSnapshot(stations,river,currentSt){
   const el=document.getElementById('catchment-snapshot');if(!el)return;
-  // Fetch all stations with tsIds in parallel, show results as they come in
+
+  // Fetch all stations — discover tsId first for those without one
   const results=await Promise.allSettled(
-    stations.map(s=>s.tsId
-      ? fetchSEPAById(s.tsId,s.stId,s.label,s.nMax).then(rv=>({s,rv}))
-      : Promise.resolve({s,rv:null}))
+    stations.map(async s=>{
+      let tsId=s.tsId;
+      if(!tsId&&s.stId) tsId=await discoverTsId(s.stId);
+      const rv=tsId?await fetchSEPAById(tsId,s.stId,s.label,s.nMax):null;
+      return{s,rv};
+    })
   );
-  if(!document.getElementById('catchment-snapshot'))return; // user navigated away
-  const rows=results.map(r=>{
-    const {s,rv}=r.status==='fulfilled'?r.value:{s:r.reason?.s,rv:null};
+  if(!document.getElementById('catchment-snapshot'))return;
+
+  // Separate main river gauges from tributaries
+  const mainGauges=results.filter(r=>r.status==='fulfilled'&&!r.value.s.tributary);
+  const tribs     =results.filter(r=>r.status==='fulfilled'&& r.value.s.tributary);
+
+  function stationRow(r,showTribLabel){
+    const {s,rv}=r.value;
     if(!s)return'';
     const isCurrent=s.stId===currentSt?.stId;
     const trendIcon=rv?.trend==='rising'?'▲':rv?.trend==='falling'?'▼':'→';
-    const trendCol=rv?.trend==='rising'?'var(--redl)':rv?.trend==='falling'?'var(--al)':'var(--ambl)';
+    const trendCol =rv?.trend==='rising'?'var(--redl)':rv?.trend==='falling'?'var(--al)':'var(--ambl)';
     const ls=rv?lvStat(rv.level,s.nMax,rv.trend):null;
     const levelTxt=rv?fmtLevel(rv.level):'—';
     const pctTxt=rv?Math.round((rv.level/s.nMax)*100)+'%':'—';
-    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 13px;background:${isCurrent?'rgba(74,158,106,.08)':'var(--surface)'};border:1px solid ${isCurrent?'rgba(74,158,106,.3)':'var(--border)'};border-radius:var(--rs);gap:10px">
+    const lagNote=s.tributary&&s.lag?`<span style="font-size:9px;color:var(--text3);margin-left:4px">~${s.lag}h lag</span>`:'';
+    const tribName=showTribLabel&&s.river?`<span style="font-size:9px;color:var(--text3)"> · ${s.river}</span>`:'';
+    return`<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 13px;background:${isCurrent?'rgba(74,158,106,.08)':'var(--surface)'};border:1px solid ${isCurrent?'rgba(74,158,106,.3)':'var(--border)'};border-radius:var(--rs);gap:10px">
   <div style="flex:1;min-width:0">
-    <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isCurrent?'◉ ':''} ${s.label}</div>
-    ${rv?`<div style="font-size:10px;color:var(--text3);margin-top:2px">nMax ${fmtNMax(s.nMax)} · ${pctTxt} of normal</div>`:'<div style="font-size:10px;color:var(--text3);margin-top:2px">No live data</div>'}
+    <div style="font-size:12px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${isCurrent?'◉ ':''}${s.label}${tribName}${lagNote}</div>
+    ${rv?`<div style="font-size:10px;color:var(--text3);margin-top:2px">nMax ${fmtNMax(s.nMax)} · ${pctTxt} of normal</div>`:`<div style="font-size:10px;color:var(--text3);margin-top:2px">No live data</div>`}
   </div>
   <div style="text-align:right;flex-shrink:0">
-    ${rv?`<div style="font-size:15px;font-weight:500;font-family:var(--fd);color:var(--text)">${levelTxt} <span style="font-size:13px;color:${trendCol}">${trendIcon}</span></div>
-    <div style="margin-top:3px"><span class="badge ${ls.cls}" style="font-size:9px;padding:1px 6px">${ls.text}</span></div>`
-    :`<a href="https://waterlevels.sepa.org.uk/Station/${s.stId}" target="_blank" style="font-size:10px;color:var(--al)">SEPA ↗</a>`}
+    ${rv
+      ?`<div style="font-size:15px;font-weight:500;font-family:var(--fd);color:var(--text)">${levelTxt} <span style="font-size:13px;color:${trendCol}">${trendIcon}</span></div>
+       <div style="margin-top:3px"><span class="badge ${ls.cls}" style="font-size:9px;padding:1px 6px">${ls.text}</span></div>`
+      :`<a href="https://waterlevels.sepa.org.uk/Station/${s.stId}" target="_blank" style="font-size:10px;color:var(--al)">SEPA ↗</a>`}
   </div>
 </div>`;
-  }).join('');
-  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${rows}</div>`;
+  }
+
+  let html='';
+  if(mainGauges.length){
+    html+=`<div class="lbl" style="font-size:9px;margin-bottom:4px">MAIN RIVER</div>`;
+    html+=mainGauges.map(r=>stationRow(r,false)).join('');
+  }
+  if(tribs.length){
+    html+=`<div class="lbl" style="font-size:9px;margin-top:10px;margin-bottom:4px">TRIBUTARIES <span style="font-weight:400;color:var(--text3)">— rising tributaries may signal a coming rise on the main river</span></div>`;
+    html+=tribs.map(r=>stationRow(r,true)).join('');
+  }
+  el.innerHTML=`<div style="display:flex;flex-direction:column;gap:7px">${html}</div>`;
 }
 
 /* RIVERS VIEW */
@@ -2065,6 +2145,7 @@ function initMap(){
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
     attribution:'© OpenStreetMap © CARTO',maxZoom:19,subdomains:'abcd'
   }).addTo(_leafletMap);
+  // Leaflet click kept as desktop fallback — overlay handles mobile
   _leafletMap.on('click',e=>{
     if(!_placingMode) return;
     _pendingPin=_pendingPin||{cat:'parking'};
@@ -2072,8 +2153,8 @@ function initMap(){
     _pendingPin.lon=e.latlng.lng;
     updatePlacingMarker(e.latlng.lat,e.latlng.lng);
     _placingMode=false;
-    document.getElementById('map-tap-banner').style.display='none';
-    document.getElementById('map-place-cancel').style.display='none';
+    const overlay=document.getElementById('map-place-overlay');
+    if(overlay){overlay.style.display='none';overlay.onclick=null;overlay.ontouchend=null;}
     openModal('modal-pin');
     const locEl=document.getElementById('pin-loc-display');
     if(locEl)locEl.textContent=`${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`;
@@ -2118,19 +2199,45 @@ function setMapFilter(cat,btn){
 }
 
 function pinPickOnMap(){
-  // Save current form state, close modal, enter picking mode
   closeModal('modal-pin');
   _placingMode=true;
-  document.getElementById('map-tap-banner').style.display='block';
-  document.getElementById('map-place-cancel').style.display='block';
+  const overlay=document.getElementById('map-place-overlay');
+  if(overlay){
+    overlay.style.display='block';
+    // Handle both click (desktop) and touchend (mobile) on the overlay itself
+    overlay.onclick=null;
+    overlay.ontouchend=null;
+    const handlePlace=function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.target.tagName==='BUTTON')return; // let cancel button work
+      // Get coordinates from touch or mouse
+      const rect=document.getElementById('leaflet-map').getBoundingClientRect();
+      const clientX=e.changedTouches?e.changedTouches[0].clientX:e.clientX;
+      const clientY=e.changedTouches?e.changedTouches[0].clientY:e.clientY;
+      if(!_leafletMap)return;
+      const point=_leafletMap.containerPointToLatLng([clientX-rect.left,clientY-rect.top]);
+      _pendingPin=_pendingPin||{cat:'parking'};
+      _pendingPin.lat=point.lat;
+      _pendingPin.lon=point.lng;
+      updatePlacingMarker(point.lat,point.lng);
+      _placingMode=false;
+      overlay.style.display='none';
+      overlay.onclick=null;overlay.ontouchend=null;
+      openModal('modal-pin');
+      const locEl=document.getElementById('pin-loc-display');
+      if(locEl)locEl.textContent=`${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+    };
+    overlay.onclick=handlePlace;
+    overlay.ontouchend=handlePlace;
+  }
 }
 
 function cancelPinPlace(){
   _placingMode=false;
-  document.getElementById('map-tap-banner').style.display='none';
-  document.getElementById('map-place-cancel').style.display='none';
-  // Reopen modal if we were in the middle of adding
-  if(_pendingPin!==null) openModal('modal-pin');
+  const overlay=document.getElementById('map-place-overlay');
+  if(overlay){overlay.style.display='none';overlay.onclick=null;overlay.ontouchend=null;}
+  if(_pendingPin!==null)openModal('modal-pin');
 }
 
 function startAddPin(){
@@ -2226,8 +2333,8 @@ function deletePin(){
 function closePinModal(){
   closeModal('modal-pin');
   _placingMode=false;
-  const tb=document.getElementById('map-tap-banner');if(tb)tb.style.display='none';
-  const cb=document.getElementById('map-place-cancel');if(cb)cb.style.display='none';
+  const overlay=document.getElementById('map-place-overlay');
+  if(overlay){overlay.style.display='none';overlay.onclick=null;overlay.ontouchend=null;}
   if(_placingMarker&&_leafletMap){_leafletMap.removeLayer(_placingMarker);_placingMarker=null;}
   _pendingPin=null;_editingPinId=null;
 }
