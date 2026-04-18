@@ -515,7 +515,7 @@ window.addEventListener('offline', () => { /* banner is set by fetch failures, n
 async function fetchWxWithCache(lat, lon) {
   try {
     const r = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=1&past_days=1&timezone=Europe%2FLondon`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode&hourly=temperature_2m,precipitation,windspeed_10m,winddirection_10m,windgusts_10m,surface_pressure,weathercode,soil_temperature_0cm&forecast_days=2&past_days=1&timezone=Europe%2FLondon`,
       { signal: AbortSignal.timeout(5000) }
     );
     if(!r.ok) throw new Error('wx fetch failed');
@@ -899,6 +899,7 @@ function refreshHereView(){
   const alerts=getAlerts(fc);
   const cond=scoreNow(wx?.current,rv,st?.nMax,p6h);
   document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,lat,lon,alerts,wx?.hourly,fc,null);
+  setTimeout(()=>renderSpeciesCards(river),0);
   renderForecast(fc,alerts,st?.lag||18);
   renderRiverTab(rv,river,st);
   if(curHTab==='river'&&rv)setTimeout(()=>drawRiverGraph(rv),80);
@@ -1056,9 +1057,21 @@ function scoreNow(w,r,nMax,pressureTrend6h){
 }
 function scoreDay(o){
   let s=5;
+  // Today's own rain — direct impact on wading and comfort
   if((o.rain||0)>20)s-=2;else if((o.rain||0)>8)s-=1;
+  // Lagged rain = rain that fell upstream N hours ago, now arriving at gauge
+  // Single lag day (passed from renderForecast)
   if((o.laggedRain||0)>20)s-=2;else if((o.laggedRain||0)>10)s-=1;
-  // Wind + gusts — use same graduated scale as scoreNow
+  // Accumulated upstream rain over prior 3 days — models flood risk even on sunny days
+  // Weight: day-3 = 0.3, day-2 = 0.6, day-1 = 1.0 (closer = more impact)
+  const accRain=(o.rain3dAgo||0)*0.3+(o.rain2dAgo||0)*0.6+(o.rain1dAgo||0)*1.0;
+  if(accRain>40)s-=3;       // heavy sustained rain — river likely in flood
+  else if(accRain>25)s-=2;  // significant accumulation — bank fishing only
+  else if(accRain>12)s-=1;  // moderate — river elevated
+  // If today is sunny but yesterday had heavy rain: add a note penalty
+  // (river still running high even though today's weather is nice)
+  if((o.rain||0)<3&&(o.rain1dAgo||0)>20)s-=1;
+  // Wind + gusts — graduated scale
   const wind=o.wind||0;
   const gusts=o.gusts||0;
   const effectiveWind=Math.max(wind,gusts*0.7);
@@ -1070,6 +1083,7 @@ function scoreDay(o){
   if(p>1015)s+=1;else if(p<1000)s-=1;
   const t=((o.hi||12)+(o.lo||6))/2;
   if(t>=6&&t<=16)s+=1;
+  // Falling river bonus: yesterday had rain but today is clear — river dropping, fish active
   if((o.laggedRain||0)>5&&(o.rain||0)<3)s+=1;
   return Math.max(1,Math.min(10,s));
 }
@@ -1589,6 +1603,7 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
     hereData={lat:userLat,lon:userLon,river,wx,rv:cachedRv,fc,st};
     const cond=scoreNow(wx?.current,cachedRv,g.nMax,p6h);
     document.getElementById('here-now').innerHTML=buildNow(river,null,wx,cachedRv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,isFinite(cacheTs)?cacheTs:null);
+  setTimeout(()=>renderSpeciesCards(river),0);
     renderForecast(fc,alerts,g.lag||18);
     renderRiverTab(cachedRv,river,st);
     return;
@@ -1605,6 +1620,7 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
   hereData={lat:userLat,lon:userLon,river,wx,rv:null,fc,st};
   const condNoRiver=scoreNow(wx?.current,null,g.nMax,p6h);
   document.getElementById('here-now').innerHTML=buildNow(river,null,wx,null,condNoRiver,st,userLat,userLon,alerts,wx?.hourly,fc,null);
+  setTimeout(()=>renderSpeciesCards(river),0);
   renderForecast(fc,alerts,g.lag||18);
   renderRiverTab(null,river,st);
 
@@ -1623,6 +1639,7 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
       const condWithRiver=scoreNow(wx?.current,rv,g.nMax,p6h);
       const cacheTs=(wxRes.fromCache||fcRes.fromCache)?Math.min(...[wxRes.ts,fcRes.ts,rvRes.ts].filter(Boolean)):null;
       document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,condWithRiver,st,userLat,userLon,alerts,wx?.hourly,fc,isFinite(cacheTs)?cacheTs:null);
+  setTimeout(()=>renderSpeciesCards(river),0);
       renderRiverTab(rv,river,st);
       if(!wxRes.fromCache && !fcRes.fromCache){
         writeConditionsCache(userLat,userLon,wx,fc,rv);
@@ -1707,6 +1724,7 @@ async function loadConditionsForRiver(idx,userLat,userLon,pn){
   const cond=scoreNow(wx?.current,rv,st?.nMax,p6h);
   const alerts=getAlerts(fc);
   document.getElementById('here-now').innerHTML=buildNow(river,null,wx,rv,cond,st,userLat,userLon,alerts,wx?.hourly,fc,anyFromCache&&isFinite(oldestTs)?oldestTs:null);
+  setTimeout(()=>renderSpeciesCards(river),0);
   renderForecast(fc,alerts,st?.lag||18);
   renderRiverTab(rv,river,st);
 }
@@ -1760,7 +1778,7 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
   let sunrise='—',sunset='—';
   if(fc?.daily?.sunrise?.[0])sunrise=new Date(fc.daily.sunrise[0]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
   if(fc?.daily?.sunset?.[0])sunset=new Date(fc.daily.sunset[0]).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
-  const hourlyHTML=(hourly||wx?.hourly)?buildHourly(hourly||wx?.hourly):'';
+  const hourlyHTML=(hourly||wx?.hourly)?buildHourly(hourly||wx?.hourly, fc):'';
   return`${alertHTML}
 <div class="lbl">Location</div>
 <div class="cf">
@@ -1820,156 +1838,133 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
   <a href="https://maps.apple.com/?ll=${gaugeMapLat},${gaugeMapLon}&q=${gaugeLabel}" class="map-a" target="_blank">🗺 Apple Maps</a>
 </div>
 <div class="lbl">Species on ${river.name}</div>
-${(()=>{
-  try{
-    const _month=new Date().getMonth()+1;
-    const _spMap={
-      'salmon':'atlantic_salmon','atlantic salmon':'atlantic_salmon',
-      'sea trout':'sea_trout','sea-trout':'sea_trout',
-      'brown trout':'brown_trout','brown-trout':'brown_trout','wild brown trout':'brown_trout',
-      'grayling':'grayling','rainbow trout':'rainbow_trout','pike':'pike'
-    };
-    const _riverSpecies=(river.species||'').split(',').map(s=>s.trim()).filter(s=>s&&s!=='—');
-    if(!_riverSpecies.length)return'';
-    const seasonFor={
-      atlantic_salmon:[2,3,4,5,6,7,8,9,10],
-      sea_trout:[5,6,7,8,9],
-      brown_trout:[3,4,5,6,7,8,9,10],
-      grayling:[10,11,12,1,2],
-      rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],
-      pike:[10,11,12,1,2,3]
-    };
-    return _riverSpecies.map(sp=>{
-      const key=_spMap[sp.toLowerCase()];
-      const sd=key?SPECIES_DATA[key]:null;
-      if(!sd)return'';
-      const inSeason=(seasonFor[key]||[]).includes(_month);
-      const sid='sp'+key+river.name.replace(/[^a-z0-9]/gi,'');
-      const badge=inSeason
-        ?'<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#1a3d28;border:1px solid #2d6b44;color:#7dc49a;margin-left:8px">In season</span>'
-        :'<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#1c2b1f;border:1px solid #2a3d2e;color:#5a7060;margin-left:8px">Off season</span>';
-      const tacticRows=sd.tactics.map(t=>
-        '<div style="padding:5px 0;border-bottom:1px solid #1c2b1f">'
-        +'<span style="font-size:11px;color:#5a7060;display:block">'+t.k+'</span>'
-        +'<span style="font-size:11px;color:#8fa892;display:block;text-align:right">'+t.v+'</span>'
-        +'</div>'
-      ).join('');
-      return '<div style="border:1px solid #2a3d2e;border-radius:8px;overflow:hidden;margin-bottom:8px;background:#1e2d22">'
-        +'<div id="'+sid+'hdr" onclick="(function(id){var b=document.getElementById(id);var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';})(\''+sid+'bod\')" '
-        +'style="padding:11px 13px;cursor:pointer;background:#1e2d22;border-bottom:0">'
-        +'<div style="overflow:hidden">'
-        +'<span style="width:10px;height:10px;border-radius:50%;background:'+sd.color+';display:inline-block;vertical-align:middle;margin-right:8px"></span>'
-        +'<span style="font-size:13px;font-weight:600;color:#e8f0e9;vertical-align:middle">'+sd.name+'</span>'
-        +badge
-        +'<span style="float:right;font-size:11px;color:#5a7060;margin-top:2px">▼</span>'
-        +'</div>'
-        +'</div>'
-        +'<div id="'+sid+'bod" style="display:none;padding:11px 13px;border-top:1px solid #2a3d2e;background:#152019">'
-        +'<div style="font-size:11px;color:#5a7060;line-height:1.6;margin-bottom:8px">'+sd.desc+'</div>'
-        +'<div style="font-size:10px;color:#3d5c45;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1c2b1f">Season: '+sd.season+' · Best: '+sd.bestMonths+'</div>'
-        +tacticRows
-        +'</div>'
-        +'</div>';
-    }).join('');
-  }catch(e){return'<div style="color:#e05555;font-size:11px;padding:8px">Error: '+e.message+'</div>';}
-})()} 
+<div id="species-cards-${river.name.replace(/[^a-z0-9]/gi,'').toLowerCase()}"></div>
 <div class="lbl">Log a catch here</div>
 <button class="bp" onclick='quickLog(${JSON.stringify({name:river.name,lat,lon,sepa:river.sepa||null})})'>+ Log catch at ${river.name}</button>
 <div style="height:10px"></div>`;}
 
-/* Build collapsible species reference cards for a river */
-function buildSpeciesCards(river,waterTemp){
+/* ═══ SPECIES CARDS — rendered after innerHTML is set, never inside template literals ═══ */
+function renderSpeciesCards(river){
+  const slug=river.name.replace(/[^a-z0-9]/gi,'').toLowerCase();
+  const el=document.getElementById('species-cards-'+slug);
+  if(!el)return;
   const month=new Date().getMonth()+1;
-  // Map all name variants used in RIVERS data → SPECIES_DATA keys (case-insensitive)
   const spMap={
     'salmon':'atlantic_salmon','atlantic salmon':'atlantic_salmon',
     'sea trout':'sea_trout','sea-trout':'sea_trout',
     'brown trout':'brown_trout','brown-trout':'brown_trout','wild brown trout':'brown_trout',
-    'grayling':'grayling',
-    'rainbow trout':'rainbow_trout','rainbow-trout':'rainbow_trout',
-    'pike':'pike',
+    'grayling':'grayling','rainbow trout':'rainbow_trout','pike':'pike'
   };
-  const riverSpecies=(river.species||'').split(',').map(s=>s.trim());
-  const cards=riverSpecies.map(sp=>{
+  const seasonFor={
+    atlantic_salmon:[2,3,4,5,6,7,8,9,10],sea_trout:[5,6,7,8,9],brown_trout:[3,4,5,6,7,8,9,10],
+    grayling:[10,11,12,1,2],rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],pike:[10,11,12,1,2,3]
+  };
+  const riverSpecies=(river.species||'').split(',').map(s=>s.trim()).filter(s=>s&&s!=='—');
+  if(!riverSpecies.length){el.innerHTML='';return;}
+  const html=riverSpecies.map(sp=>{
     const key=spMap[sp.toLowerCase()];
     const sd=key?SPECIES_DATA[key]:null;
     if(!sd)return'';
-    // Is this species in season right now?
-    const inSeason=isSpeciesInSeason(key,month);
-    const tempOk=waterTemp!==null?isWaterTempOk(key,waterTemp):null;
-    const badge=inSeason?`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(74,158,106,.15);border:1px solid rgba(74,158,106,.3);color:var(--al)">In season</span>`:`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid var(--border2);color:var(--text3)">Out of season</span>`;
-    const tempBadge=tempOk!==null?`<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:${tempOk?'rgba(74,158,106,.1)':'rgba(100,100,120,.1)'};border:1px solid ${tempOk?'rgba(74,158,106,.25)':'var(--border2)'};color:${tempOk?'var(--al)':'var(--text3)'}">${tempOk?'Good water temp':'Cold for this species'}</span>`:'';
-    const id=`sp-${key}-${river.name.replace(/\s/g,'')}`;
-    return`<div style="border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:7px">
-  <div onclick="toggleSpeciesCard('${id}')" style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:var(--surface)">
-    <div style="display:flex;align-items:center;gap:9px">
-      <div style="width:10px;height:10px;border-radius:50%;background:${sd.color};flex-shrink:0"></div>
-      <span style="font-size:13px;font-weight:500;color:var(--text)">${sd.name}</span>
-      ${badge}${tempBadge?` ${tempBadge}`:''}
-    </div>
-    <span id="${id}-arr" style="font-size:11px;color:var(--text3)">▼</span>
-  </div>
-  <div id="${id}" style="display:none;padding:11px 13px;border-top:1px solid var(--border);background:var(--bg2)">
-    <div style="font-size:11px;color:var(--text3);line-height:1.6;margin-bottom:9px">${sd.desc}</div>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:6px">Season: ${sd.season} · Best: ${sd.bestMonths}</div>
-    ${sd.tactics.map(t=>`<div class="tr2"><span class="tk">${t.k}</span><span class="tv" style="max-width:60%;text-align:right;font-size:11px">${t.v}</span></div>`).join('')}
-  </div>
+    const inSeason=(seasonFor[key]||[]).includes(month);
+    const sid='sp'+key+slug;
+    return`<div style="border:1px solid #2a3d2e;border-radius:8px;overflow:hidden;margin-bottom:8px">
+<div onclick="spToggle('${sid}')" style="padding:11px 13px;cursor:pointer;background:#1e2d22">
+  <span style="width:10px;height:10px;border-radius:50%;background:${sd.color};display:inline-block;vertical-align:middle;margin-right:8px"></span>
+  <span style="font-size:13px;font-weight:600;color:#e8f0e9;vertical-align:middle">${sd.name}</span>
+  <span style="font-size:10px;padding:1px 6px;border-radius:8px;${inSeason?'background:#1a3d28;border:1px solid #2d6b44;color:#7dc49a':'background:#1c2b1f;border:1px solid #2a3d2e;color:#5a7060'};margin-left:8px;vertical-align:middle">${inSeason?'In season':'Off season'}</span>
+  <span id="${sid}arr" style="float:right;font-size:11px;color:#5a7060;margin-top:1px">▼</span>
+</div>
+<div id="${sid}bod" style="display:none;padding:11px 13px;border-top:1px solid #2a3d2e;background:#152019">
+  <div style="font-size:11px;color:#5a7060;line-height:1.6;margin-bottom:8px">${sd.desc}</div>
+  <div style="font-size:10px;color:#3d5c45;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid #1c2b1f">Season: ${sd.season} · Best: ${sd.bestMonths}</div>
+  ${sd.tactics.map(t=>`<div style="padding:5px 0;border-bottom:1px solid #1c2b1f">
+    <span style="font-size:11px;color:#5a7060;display:block">${t.k}</span>
+    <span style="font-size:11px;color:#8fa892;display:block;text-align:right">${t.v}</span>
+  </div>`).join('')}
+</div>
 </div>`;
   }).join('');
-  return cards||`<div style="font-size:12px;color:var(--text3)">No species data for this river.</div>`;
+  el.innerHTML=html;
 }
-
-function toggleSpeciesCard(id){
-  const el=document.getElementById(id);
-  const arr=document.getElementById(id+'-arr');
-  if(!el)return;
-  const open=el.style.display!=='none';
-  el.style.display=open?'none':'block';
+function spToggle(sid){
+  const bod=document.getElementById(sid+'bod');
+  const arr=document.getElementById(sid+'arr');
+  if(!bod)return;
+  const open=bod.style.display!=='none';
+  bod.style.display=open?'none':'block';
   if(arr)arr.textContent=open?'▼':'▲';
 }
-
-function isSpeciesInSeason(key,month){
-  const seasons={
-    atlantic_salmon:[2,3,4,5,6,7,8,9,10],
-    sea_trout:[5,6,7,8,9],
-    brown_trout:[3,4,5,6,7,8,9,10],
-    grayling:[10,11,12,1,2],
-    rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],
-    pike:[10,11,12,1,2,3]
-  };
-  return(seasons[key]||[]).includes(month);
-}
-
-function isWaterTempOk(key,temp){
-  const ranges={atlantic_salmon:[6,18],sea_trout:[10,18],brown_trout:[8,18],grayling:[2,12],rainbow_trout:[6,18],pike:[4,16]};
-  const r=ranges[key];
-  return r?temp>=r[0]&&temp<=r[1]:null;
-}
 /* HOURLY SECTION */
-function buildHourly(h){
+function buildHourly(h, fc){
   const now=new Date();
-  const curHr=now.getHours();
-  // Show -3h to +8h relative to now (12 slots total)
-  const windowStart=curHr-3;
-  const windowEnd=curHr+8;
+  const nowMs=now.getTime();
+  const absNowHr=Math.floor(nowMs/3600000); // absolute hour index from epoch
+
+  // Get today's sunrise/sunset from forecast (absolute hours)
+  let sunriseAbsHr=null, sunsetAbsHr=null;
+  if(fc?.daily?.sunrise?.[0]){
+    const sr=new Date(fc.daily.sunrise[0]);
+    sunriseAbsHr=Math.floor(sr.getTime()/3600000);
+  }
+  if(fc?.daily?.sunset?.[0]){
+    const ss=new Date(fc.daily.sunset[0]);
+    sunsetAbsHr=Math.floor(ss.getTime()/3600000);
+  }
+  // Tomorrow sunrise too (for post-midnight hours)
+  let tomorrowSunriseAbsHr=null;
+  if(fc?.daily?.sunrise?.[1]){
+    const sr2=new Date(fc.daily.sunrise[1]);
+    tomorrowSunriseAbsHr=Math.floor(sr2.getTime()/3600000);
+  }
+
+  const moon=moonPhase();
+
+  // Night icon: use moon phase + optional cloud overlay
+  function nightIcon(code){
+    // If weather code indicates cloud or rain, show cloudy night
+    const cloudy=[2,3,45,51,53,55,61,63,65,71,73,75,80,81,82,95,99];
+    const partCloud=[1];
+    if(cloudy.includes(code))return'🌧️'; // keep rain/snow icons even at night
+    if(partCloud.includes(code))return'🌙'; // part cloud at night
+    return moon.icon; // clear night — show moon phase
+  }
+
+  function hourIcon(code, absHr){
+    // Sunrise hour
+    if(sunriseAbsHr!==null&&absHr===sunriseAbsHr)return'🌅';
+    if(tomorrowSunriseAbsHr!==null&&absHr===tomorrowSunriseAbsHr)return'🌅';
+    // Sunset hour
+    if(sunsetAbsHr!==null&&absHr===sunsetAbsHr)return'🌇';
+    // Is it night? (before sunrise or after sunset)
+    const isNight=(sunriseAbsHr!==null&&sunsetAbsHr!==null)
+      ?(absHr<sunriseAbsHr||absHr>sunsetAbsHr)
+      :false; // fallback: use daytime icons if we don't know
+    if(isNight)return nightIcon(code);
+    return wxI(code);
+  }
+
   const cells=h.time.map((t,i)=>{
+    const slotMs=new Date(t).getTime();
+    const slotAbsHr=Math.floor(slotMs/3600000);
+    const diffHr=slotAbsHr-absNowHr;
+    if(diffHr<-3||diffHr>8)return null;
     const hr=new Date(t).getHours();
-    const dayOffset=new Date(t).getDate()-now.getDate();
-    // Only include today's hours in our window (dayOffset=0) plus next-day if window crosses midnight
-    const absHr=dayOffset*24+hr;
-    const absNow=curHr;
-    if(absHr<absNow-3||absHr>absNow+8)return null;
-    const isNow=dayOffset===0&&hr===curHr;
-    const isPast=absHr<absNow;
+    const isNow=diffHr===0;
+    const isPast=diffHr<0;
+    const isMidnight=hr===0&&diffHr>0;
     const dir=h.winddirection_10m?.[i]||0;
     const speed=h.windspeed_10m?.[i]||0;
     const gusts=h.windgusts_10m?.[i]||0;
     const hasGusts=gusts>speed*1.3&&gusts>15;
     const windStr=windDisplay(dir,speed);
     const gustStr=hasGusts?`<div class="hs" style="color:var(--ambl)">↑${fmtWind(gusts)}</div>`:'';
+    const code=h.weathercode?.[i]||0;
+    const icon=hourIcon(code,slotAbsHr);
+    // Label: Now / 00h (with date if midnight crosses) / HHh
+    const label=isNow?'Now':isMidnight?`00h<div style="font-size:8px;opacity:.7">${new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</div>`:String(hr).padStart(2,'0')+'h';
     return`<div class="hcell${isNow?' now':''}${isPast?' past':''}">
-      <div class="ht" style="${isPast?'opacity:.55':''}">${isNow?'Now':String(hr).padStart(2,'0')+'h'}</div>
-      <div class="hi">${wxI(h.weathercode?.[i]||0)}</div>
+      <div class="ht"${isPast?' style="opacity:.55"':''}>${label}</div>
+      <div class="hi">${icon}</div>
       <div class="hv">${fmtTemp(h.temperature_2m[i])}</div>
       <div class="hs">${fmtRain(h.precipitation?.[i]||0)}</div>
       <div class="hs">${windStr}</div>
@@ -1977,7 +1972,7 @@ function buildHourly(h){
       <div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div>
     </div>`;
   }).filter(Boolean).join('');
-  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure</div></div>`;
+  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure · 🌅🌇 = sunrise/sunset</div></div>`;
 }
 function toggleHourly(){const s=document.getElementById('hourly-section'),a=document.getElementById('hourly-arr');if(!s)return;const op=s.style.display!=='none';s.style.display=op?'none':'block';if(a)a.textContent=op?'▼':'▲';}
 
@@ -2014,6 +2009,7 @@ async function loadCatchGauge(catKey,idx){
     hereData.river,null,hereData.wx,usedRv,cond,newSt,
     hereData.lat,hereData.lon,alerts,hereData.wx?.hourly,hereData.fc
   );
+  setTimeout(()=>renderSpeciesCards(river),0);
   renderRiverTab(usedRv,hereData.river,newSt);
   // Re-render forecast with new catchment lag if available
   const lag=cat.lag||hereData.st?.lag||18;
@@ -2032,13 +2028,16 @@ function renderForecast(fc,alerts,lagHours){
   const lag=lagHours||18;
   const aHTML=alerts&&alerts.length?`<div class="lbl">Active warnings</div>${alerts.map(aB).join('')}`:'';
   const cards=d.time.map((date,i)=>{
-    // Rainfall lag: rain that fell 'lag' hours ago affects today's river level
-    // For a lag of 18h, yesterday's rain still affects today
     const lagDays=Math.ceil(lag/24);
     const laggedRain=i>=lagDays?d.precipitation_sum[i-lagDays]:0;
+    // Multi-day accumulated rain for flood risk scoring
+    const rain1dAgo=i>=1?d.precipitation_sum[i-1]:0;
+    const rain2dAgo=i>=2?d.precipitation_sum[i-2]:0;
+    const rain3dAgo=i>=3?d.precipitation_sum[i-3]:0;
     const sc=scoreDay({
       rain:d.precipitation_sum[i],
       laggedRain,
+      rain1dAgo,rain2dAgo,rain3dAgo,
       wind:d.windspeed_10m_max[i],
       gusts:d.windgusts_10m_max?.[i]||0,
       pressure:d.surface_pressure_mean?.[i]||1013,
