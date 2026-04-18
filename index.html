@@ -1012,23 +1012,32 @@ function tArr(t){return t==='falling'?'▼':t==='rising'?'▲':'—';}
 function scoreNow(w,r,nMax,pressureTrend6h){
   let s=5,notes=[];
   if(r&&r.level!==null){
+    const lv=parseFloat(r.level);
     const nm=nMax||3;
-    const pct=r.level/nm;
+    const pct=lv/nm;
     const trend=r.trend;
-    // Level + trend scoring — mirrors lvStat bands exactly
-    if(pct>1.0){s-=5;notes.push('Danger to life — do not fish');}
-    else if(pct>0.8){s-=4;notes.push('Flood — river running dirty');}
-    else if(pct>0.6){s-=3;notes.push('Too high — unfishable');}
-    else if(pct>0.35){
-      if(trend==='rising'){s-=3;notes.push('Rising fast — fish unsettled');}
-      else if(trend==='falling'){s-=1;notes.push('Falling — conditions improving');}
-      else{s-=2;notes.push('High — careful approach needed');}
-    }else if(pct>0.10){
-      if(trend==='rising'){s-=1;notes.push('Rising — conditions changing');}
-      else if(trend==='falling'){s+=2;notes.push('Ideal level — falling, fish active');}
-      else{s+=1;notes.push('Ideal level — good wading');}
-    }else{
-      s-=1;notes.push('Very low — fish cautious in clear water');
+    // Absolute wading ceiling — must match lvStat exactly
+    if(lv>=0.8){
+      // River is unwadeable regardless of percentage — cap score and override note
+      if(pct>1.0){s-=5;notes.push('Danger to life — do not fish');}
+      else if(pct>0.8){s-=4;notes.push('Flood — river running dirty');}
+      else if(pct>0.6){s-=3;notes.push('Too high — bank fishing only');}
+      else if(pct>0.35){s-=2;notes.push('High — bank fishing only');}
+      else{s-=1;notes.push('No wading at this level — bank fishing only');}
+    } else {
+      // Normal percentage-based scoring
+      if(pct>0.6){s-=3;notes.push('Too high — unfishable');}
+      else if(pct>0.35){
+        if(trend==='rising'){s-=3;notes.push('Rising fast — fish unsettled');}
+        else if(trend==='falling'){s-=1;notes.push('Falling — conditions improving');}
+        else{s-=2;notes.push('High — careful approach needed');}
+      }else if(pct>0.10){
+        if(trend==='rising'){s-=1;notes.push('Rising — conditions changing');}
+        else if(trend==='falling'){s+=2;notes.push('Ideal level — falling, fish active');}
+        else{s+=1;notes.push('Ideal level — good wading');}
+      }else{
+        s-=1;notes.push('Very low — fish cautious in clear water');
+      }
     }
   }
   if(w){
@@ -1930,11 +1939,11 @@ function buildHourly(h, fc){
   }
 
   function hourIcon(code, absHr){
-    // Sunrise hour
-    if(sunriseAbsHr!==null&&absHr===sunriseAbsHr)return'🌅';
-    if(tomorrowSunriseAbsHr!==null&&absHr===tomorrowSunriseAbsHr)return'🌅';
+    // Sunrise hour — simple rising sun indicator
+    if(sunriseAbsHr!==null&&absHr===sunriseAbsHr)return'☀️↑';
+    if(tomorrowSunriseAbsHr!==null&&absHr===tomorrowSunriseAbsHr)return'☀️↑';
     // Sunset hour
-    if(sunsetAbsHr!==null&&absHr===sunsetAbsHr)return'🌇';
+    if(sunsetAbsHr!==null&&absHr===sunsetAbsHr)return'☀️↓';
     // Is it night? (before sunrise or after sunset)
     const isNight=(sunriseAbsHr!==null&&sunsetAbsHr!==null)
       ?(absHr<sunriseAbsHr||absHr>sunsetAbsHr)
@@ -1972,7 +1981,7 @@ function buildHourly(h, fc){
       <div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div>
     </div>`;
   }).filter(Boolean).join('');
-  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure · 🌅🌇 = sunrise/sunset</div></div>`;
+  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure · ☀️↑↓ = sunrise/sunset</div></div>`;
 }
 function toggleHourly(){const s=document.getElementById('hourly-section'),a=document.getElementById('hourly-arr');if(!s)return;const op=s.style.display!=='none';s.style.display=op?'none':'block';if(a)a.textContent=op?'▼':'▲';}
 
