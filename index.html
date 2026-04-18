@@ -257,6 +257,11 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
     <button class="itab" id="ht-forecast" onclick="switchHTab('forecast')">7-day</button>
     <button class="itab" id="ht-river" onclick="switchHTab('river')">River graph</button>
   </div>
+  <!-- pull-to-refresh indicator -->
+  <div id="ptr-bar" style="display:none;align-items:center;justify-content:center;gap:8px;padding:10px;font-size:12px;color:var(--text3);flex-shrink:0;background:var(--bg2)">
+    <div id="ptr-spinner" class="spinner" style="width:14px;height:14px;border-width:2px;display:none"></div>
+    <span id="ptr-label">↓ Pull to refresh</span>
+  </div>
   <div class="scroll" id="here-now">
     <div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:40px 20px;text-align:center">
       <div style="font-size:40px">📍</div>
@@ -632,8 +637,9 @@ const CATCHMENTS={
     {label:'Tweed at Coldstream',  stId:'14982',tsId:null,       nMax:3.2,  glat:55.6472,glon:-2.2472},
     {label:'Tweed at Norham',      stId:'9514', tsId:'61557010',nMax:4.724,glat:55.7167,glon:-2.1500},
     // Key Tweed tributaries — these run off quickly and signal rises to the main river
-    {label:'Ettrick at Lindean',   stId:'14990',tsId:null,       nMax:2.29, glat:55.5722,glon:-2.8889,lag:4, tributary:true,river:'Ettrick Water'},
-    {label:'Yarrow at Philiphaugh',stId:'14985',tsId:null,       nMax:1.8,  glat:55.5378,glon:-2.9556,lag:3, tributary:true,river:'Yarrow Water'},
+    {label:'Ettrick at Lindean',      stId:'14990',tsId:null,       nMax:2.29, glat:55.5722,glon:-2.8889,lag:4, tributary:true,river:'Ettrick Water'},
+    {label:'Yarrow at Gordon Arms',   stId:'14984',tsId:null,       nMax:2.06, glat:55.5083,glon:-3.1000,lag:2, tributary:true,river:'Yarrow Water'},
+    {label:'Yarrow at Philiphaugh',   stId:'14985',tsId:null,       nMax:1.8,  glat:55.5378,glon:-2.9556,lag:3, tributary:true,river:'Yarrow Water'},
     {label:'Teviot at Hawick',     stId:'15001',tsId:null,       nMax:2.5,  glat:55.4167,glon:-2.7833,lag:6, tributary:true,river:'River Teviot'},
     {label:'Gala Water at Galashiels',stId:'9683',tsId:null,     nMax:2.0,  glat:55.6139,glon:-2.8028,lag:3, tributary:true,river:'Gala Water'},
     {label:'Leader at Earlston',   stId:'14988',tsId:null,       nMax:1.9,  glat:55.6500,glon:-2.6667,lag:3, tributary:true,river:'Leader Water'},
@@ -659,6 +665,10 @@ const CATCHMENTS={
   annan:[
     {label:'Annan at Woodfoot',  stId:'133143',tsId:null,nMax:2.5,glat:55.1528,glon:-3.2639},
     {label:'Annan at Brydekirk', stId:'133144',tsId:null,nMax:3.0,glat:55.0278,glon:-3.3417},
+  ],
+  yarrow:[
+    {label:'Yarrow at Gordon Arms',  stId:'14984',tsId:null,nMax:2.06,glat:55.5083,glon:-3.1000},
+    {label:'Yarrow at Philiphaugh', stId:'14985',tsId:null,nMax:1.8, glat:55.5378,glon:-2.9556},
   ],
 };
 
@@ -794,7 +804,7 @@ const RIVERS=[
   {name:'River Almond (Lothian)',lat:55.957,lon:-3.452,sepa:'leith',cat:null,catchment:'Almond Group',species:'Brown trout, Sea trout',icon:'🐟'},
   {name:'Lyne Water',lat:55.640,lon:-3.250,sepa:'lyne',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'Ettrick Water',lat:55.548,lon:-2.933,sepa:'ettrick',cat:null,catchment:'Tweed tributary',species:'Brown trout, Sea trout',icon:'🐟'},
-  {name:'Yarrow Water',lat:55.530,lon:-3.030,sepa:'yarrow',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
+  {name:'Yarrow Water',lat:55.530,lon:-3.030,sepa:'yarrow',cat:'yarrow',catchment:'Tweed tributary',species:'Brown trout, Grayling, Sea trout',icon:'🐟'},
   {name:'Gala Water',lat:55.617,lon:-2.817,sepa:'gala',cat:null,catchment:'Tweed tributary',species:'Brown trout, Grayling',icon:'🐟'},
   {name:'Leader Water',lat:55.700,lon:-2.763,sepa:'leader',cat:null,catchment:'Tweed tributary',species:'Brown trout, Sea trout',icon:'🐟'},
   {name:'Water of Ae',lat:55.100,lon:-3.552,sepa:'nith',cat:null,catchment:'Nith',species:'Brown trout',icon:'🐟'},
@@ -1433,6 +1443,58 @@ async function doGPS(){
   await loadConditionsForCoords(lat,lon,pn);
 }
 
+/* ── PULL-TO-REFRESH ── */
+(function initPTR(){
+  let startY=0,pulling=false,triggered=false;
+  const THRESHOLD=65;
+  function getScrollEl(){return document.getElementById('here-now');}
+  function getBar(){return document.getElementById('ptr-bar');}
+  function getLabel(){return document.getElementById('ptr-label');}
+  function getSpinner(){return document.getElementById('ptr-spinner');}
+
+  document.addEventListener('touchstart',e=>{
+    const el=getScrollEl();
+    if(!el||!el.contains(e.target))return;
+    if(el.scrollTop>0)return; // only trigger when at top
+    startY=e.touches[0].clientY;
+    pulling=true;triggered=false;
+  },{passive:true});
+
+  document.addEventListener('touchmove',e=>{
+    if(!pulling)return;
+    const el=getScrollEl();
+    if(!el||el.scrollTop>2){pulling=false;return;}
+    const dy=e.touches[0].clientY-startY;
+    if(dy<10)return;
+    const bar=getBar(),lbl=getLabel();
+    if(!bar)return;
+    bar.style.display='flex';
+    if(dy>THRESHOLD&&!triggered){
+      lbl.textContent='↑ Release to refresh';
+    } else if(dy<=THRESHOLD){
+      lbl.textContent='↓ Pull to refresh';
+    }
+  },{passive:true});
+
+  document.addEventListener('touchend',async e=>{
+    if(!pulling)return;
+    pulling=false;
+    const dy=e.changedTouches[0].clientY-startY;
+    const bar=getBar(),lbl=getLabel(),sp=getSpinner();
+    if(dy>THRESHOLD&&hereData.lat&&hereData.lon&&!triggered){
+      triggered=true;
+      if(lbl)lbl.textContent='Refreshing...';
+      if(sp)sp.style.display='block';
+      // Bust cache so fresh data is fetched
+      const ck=_cacheKey(hereData.lat,hereData.lon);
+      try{localStorage.removeItem(ck);}catch(err){}
+      await loadConditionsForCoords(hereData.lat,hereData.lon,_locName||'');
+    }
+    if(bar)bar.style.display='none';
+    if(sp)sp.style.display='none';
+  },{passive:true});
+})();
+
 async function loadConditionsForCoords(lat,lon,pn){
   setLoadingNow('Finding nearest water...');
 
@@ -1495,7 +1557,7 @@ async function loadConditionsForGauge(g, userLat, userLon, pn){
     RIVERS.find(r=>g.river.includes(r.name.replace('River ','').replace('Water of ','')));
   const headerName=headerRiver?.name||g.river||g.label;
   document.getElementById('here-title').textContent=headerName;
-  document.getElementById('here-sub').textContent=(pn&&pn!==headerName?'Near '+pn+' · ':'')+g.label+' · SEPA gauge';
+  document.getElementById('here-sub').textContent=(pn&&pn!==headerName?'Near '+pn+' · ':'')+g.label+' · SEPA gauge · weather for '+(pn||'your location');
   setLoadingNow('Loading '+g.label+'...');
   document.getElementById('here-forecast').innerHTML='';document.getElementById('here-river').innerHTML='';
   curHTab='now';switchHTab('now');
@@ -1759,7 +1821,7 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
 </div>
 <div class="lbl">Species on ${river.name}</div>
 ${(()=>{
-  try {
+  try{
     const _month=new Date().getMonth()+1;
     const _spMap={
       'salmon':'atlantic_salmon','atlantic salmon':'atlantic_salmon',
@@ -1768,42 +1830,48 @@ ${(()=>{
       'grayling':'grayling','rainbow trout':'rainbow_trout','pike':'pike'
     };
     const _riverSpecies=(river.species||'').split(',').map(s=>s.trim()).filter(s=>s&&s!=='—');
-    if(!_riverSpecies.length) return '<div style="font-size:12px;color:#5a7060">No species data.</div>';
+    if(!_riverSpecies.length)return'';
+    const seasonFor={
+      atlantic_salmon:[2,3,4,5,6,7,8,9,10],
+      sea_trout:[5,6,7,8,9],
+      brown_trout:[3,4,5,6,7,8,9,10],
+      grayling:[10,11,12,1,2],
+      rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],
+      pike:[10,11,12,1,2,3]
+    };
     return _riverSpecies.map(sp=>{
       const key=_spMap[sp.toLowerCase()];
       const sd=key?SPECIES_DATA[key]:null;
       if(!sd)return'';
-      const inSeason=[2,3,4,5,6,7,8,9,10].includes(_month)&&key==='atlantic_salmon'||
-        [5,6,7,8,9].includes(_month)&&key==='sea_trout'||
-        [3,4,5,6,7,8,9,10].includes(_month)&&key==='brown_trout'||
-        [10,11,12,1,2].includes(_month)&&key==='grayling'||
-        key==='rainbow_trout'||
-        [10,11,12,1,2,3].includes(_month)&&key==='pike';
-      const seasonBadge=inSeason
-        ?'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(74,158,106,.15);border:1px solid rgba(74,158,106,.3);color:#7dc49a">In season</span>'
-        :'<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.16);color:#5a7060">Out of season</span>';
-      const sid='sp-'+key+'-'+river.name.replace(/[^a-z0-9]/gi,'');
+      const inSeason=(seasonFor[key]||[]).includes(_month);
+      const sid='sp'+key+river.name.replace(/[^a-z0-9]/gi,'');
+      const badge=inSeason
+        ?'<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#1a3d28;border:1px solid #2d6b44;color:#7dc49a;margin-left:8px">In season</span>'
+        :'<span style="font-size:10px;padding:1px 6px;border-radius:8px;background:#1c2b1f;border:1px solid #2a3d2e;color:#5a7060;margin-left:8px">Off season</span>';
       const tacticRows=sd.tactics.map(t=>
-        '<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.06);font-size:11px">'
-        +'<span style="color:#5a7060">'+t.k+'</span>'
-        +'<span style="color:#8fa892;max-width:60%;text-align:right">'+t.v+'</span></div>'
+        '<div style="padding:5px 0;border-bottom:1px solid #1c2b1f">'
+        +'<span style="font-size:11px;color:#5a7060;display:block">'+t.k+'</span>'
+        +'<span style="font-size:11px;color:#8fa892;display:block;text-align:right">'+t.v+'</span>'
+        +'</div>'
       ).join('');
-      return '<div style="border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;margin-bottom:7px">'
-        +'<div onclick="var el=document.getElementById(\''+sid+'\');var open=el.style.display!==\'none\';el.style.display=open?\'none\':\'block\';this.querySelector(\'.sp-arr\').textContent=open?\'▼\':\'▲\';" '
-        +'style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:#1e2d22">'
-        +'<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'
-        +'<div style="width:10px;height:10px;border-radius:50%;background:'+sd.color+';flex-shrink:0"></div>'
-        +'<span style="font-size:13px;font-weight:500;color:#e8f0e9">'+sd.name+'</span>'
-        +' '+seasonBadge
+      return '<div style="border:1px solid #2a3d2e;border-radius:8px;overflow:hidden;margin-bottom:8px;background:#1e2d22">'
+        +'<div id="'+sid+'hdr" onclick="(function(id){var b=document.getElementById(id);var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';})(\''+sid+'bod\')" '
+        +'style="padding:11px 13px;cursor:pointer;background:#1e2d22;border-bottom:0">'
+        +'<div style="overflow:hidden">'
+        +'<span style="width:10px;height:10px;border-radius:50%;background:'+sd.color+';display:inline-block;vertical-align:middle;margin-right:8px"></span>'
+        +'<span style="font-size:13px;font-weight:600;color:#e8f0e9;vertical-align:middle">'+sd.name+'</span>'
+        +badge
+        +'<span style="float:right;font-size:11px;color:#5a7060;margin-top:2px">▼</span>'
         +'</div>'
-        +'<span class="sp-arr" style="font-size:11px;color:#5a7060;flex-shrink:0;margin-left:8px">▼</span>'
         +'</div>'
-        +'<div id="'+sid+'" style="display:none;padding:11px 13px;border-top:1px solid rgba(255,255,255,.08);background:#152019">'
-        +'<div style="font-size:11px;color:#5a7060;line-height:1.6;margin-bottom:9px">'+sd.desc+'</div>'
-        +'<div style="font-size:10px;color:#5a7060;margin-bottom:7px">Season: '+sd.season+' · Best: '+sd.bestMonths+'</div>'
-        +tacticRows+'</div></div>';
+        +'<div id="'+sid+'bod" style="display:none;padding:11px 13px;border-top:1px solid #2a3d2e;background:#152019">'
+        +'<div style="font-size:11px;color:#5a7060;line-height:1.6;margin-bottom:8px">'+sd.desc+'</div>'
+        +'<div style="font-size:10px;color:#3d5c45;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #1c2b1f">Season: '+sd.season+' · Best: '+sd.bestMonths+'</div>'
+        +tacticRows
+        +'</div>'
+        +'</div>';
     }).join('');
-  } catch(e) { return '<div style="font-size:12px;color:#e05555">Species error: '+e.message+'</div>'; }
+  }catch(e){return'<div style="color:#e05555;font-size:11px;padding:8px">Error: '+e.message+'</div>';}
 })()} 
 <div class="lbl">Log a catch here</div>
 <button class="bp" onclick='quickLog(${JSON.stringify({name:river.name,lat,lon,sepa:river.sepa||null})})'>+ Log catch at ${river.name}</button>
