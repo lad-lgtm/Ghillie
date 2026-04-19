@@ -282,7 +282,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
   <div class="topbar">
     <div class="tr">
       <div><h1>Log <span class="cc" id="catch-count">0</span></h1><p>Catches · stats · patterns</p></div>
-      <button class="bbtn" style="background:var(--accent);border-color:var(--accent);color:#fff" onclick="showNewCatch()">+ Log</button>
+      <button class="bbtn" style="background:var(--accent);border-color:var(--accent);color:#fff" onclick="showNewCatch()">+ Add</button>
     </div>
   </div>
   <div class="itabs">
@@ -307,7 +307,7 @@ body{font-family:var(--fb);background:var(--bg);color:var(--text);display:flex;j
 <div id="view-newcatch" class="view">
   <div class="topbar">
     <div class="tr">
-      <div><h1>Log a catch</h1><p id="nc-loc">Detecting location...</p></div>
+      <div><h1 id="nc-title">Log a catch</h1><p id="nc-loc">Detecting location...</p></div>
       <button class="bbtn" onclick="showView('log')">← Cancel</button>
     </div>
   </div>
@@ -2935,7 +2935,7 @@ ${withTime.length>=5?`<div class="lbl">Best months for you</div><div class="cf">
 }
 
 function catchCard(c){
-  return`<div class="le">${c.photo?`<img src="${c.photo}" class="lei" alt="Catch photo">`:`<div class="lep">🐟</div>`}<div class="leb"><div class="les">${c.species}</div><div class="lem"><span>📍 ${c.river}</span><span>🕐 ${fmtT(c.timestamp)}, ${fmtD(c.timestamp)}</span></div><div class="ldg">${c.weight?`<div class="ldc"><div class="k">Weight</div><div class="v">${c.weight} lbs</div></div>`:''} ${c.length?`<div class="ldc"><div class="k">Length</div><div class="v">${c.length} cm</div></div>`:''} ${c.fly?`<div class="ldc"><div class="k">Fly/lure</div><div class="v">${c.fly}</div></div>`:''} ${c.method?`<div class="ldc"><div class="k">Method</div><div class="v">${c.method}</div></div>`:''} ${c.weather_temp?`<div class="ldc"><div class="k">Air temp</div><div class="v">${c.weather_temp}°C</div></div>`:''} ${c.pressure?`<div class="ldc"><div class="k">Pressure</div><div class="v">${c.pressure} hPa</div></div>`:''} ${c.river_level?`<div class="ldc"><div class="k">River level</div><div class="v">${c.river_level}m</div></div>`:''} ${c.released?`<div class="ldc"><div class="k">Released</div><div class="v" style="color:var(--al)">Yes ✓</div></div>`:''} ${c.notes?`<div class="ldc" style="grid-column:1/-1"><div class="k">Notes</div><div class="v">${c.notes}</div></div>`:''}</div></div></div>`;
+  return`<div class="le">${c.photo?`<img src="${c.photo}" class="lei" alt="Catch photo">`:`<div class="lep">🐟</div>`}<div class="leb"><div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px"><div class="les">${c.species}</div><button onclick="editCatch(${c.id})" style="background:none;border:1px solid var(--border2);border-radius:6px;padding:3px 8px;font-size:10px;color:var(--text3);cursor:pointer;flex-shrink:0;font-family:var(--fb)">Edit</button></div><div class="lem"><span>📍 ${c.river}</span><span>🕐 ${fmtT(c.timestamp)}, ${fmtD(c.timestamp)}</span></div><div class="ldg">${c.weight?`<div class="ldc"><div class="k">Weight</div><div class="v">${c.weight} lbs</div></div>`:''} ${c.length?`<div class="ldc"><div class="k">Length</div><div class="v">${c.length} cm</div></div>`:''} ${c.fly?`<div class="ldc"><div class="k">Fly/lure</div><div class="v">${c.fly}</div></div>`:''} ${c.method?`<div class="ldc"><div class="k">Method</div><div class="v">${c.method}</div></div>`:''} ${c.weather_temp?`<div class="ldc"><div class="k">Air temp</div><div class="v">${c.weather_temp}°C</div></div>`:''} ${c.pressure?`<div class="ldc"><div class="k">Pressure</div><div class="v">${c.pressure} hPa</div></div>`:''} ${c.river_level?`<div class="ldc"><div class="k">River level</div><div class="v">${c.river_level}m</div></div>`:''} ${c.released?`<div class="ldc"><div class="k">Released</div><div class="v" style="color:var(--al)">Yes ✓</div></div>`:''} ${c.notes?`<div class="ldc" style="grid-column:1/-1"><div class="k">Notes</div><div class="v">${c.notes}</div></div>`:''}</div></div></div>`;
 }
 
 /* FAV LOCATIONS */
@@ -2964,45 +2964,261 @@ function renderPB(){
   el.innerHTML=`<div class="scroll" style="flex:1">${pbs.map(pb=>`<div class="pbc"><div style="font-size:28px;flex-shrink:0">🐟</div><div style="flex:1"><div style="font-size:13px;font-weight:500;color:var(--text)">${pb.species}</div><div style="font-size:20px;font-weight:500;font-family:var(--fd);color:var(--al);margin-top:2px">${pb.weight} lbs${pb.length?` · ${pb.length}cm`:''}</div><div style="font-size:10px;color:var(--text3);margin-top:3px">📍 ${pb.river} · ${pb.date}${pb.fly?' · '+pb.fly:''}</div></div><div style="font-size:22px">🏆</div></div>`).join('')}</div>`;
 }
 
-/* NEW CATCH */
-async function quickLog(ri){pending={river:ri.name,lat:ri.lat,lon:ri.lon,sepa:ri.sepa};showView('newcatch');await loadCatchForm();}
-async function showNewCatch(){
-  pending={};showView('newcatch');
-  document.getElementById('nc-loc').textContent='Detecting location...';
-  try{const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,enableHighAccuracy:true}));pending.lat=pos.coords.latitude;pending.lon=pos.coords.longitude;const pn=await revGeo(pos.coords.latitude,pos.coords.longitude);const nearest=RIVERS.reduce((a,b)=>gd(pos.coords.latitude,pos.coords.longitude,a.lat,a.lon)<gd(pos.coords.latitude,pos.coords.longitude,b.lat,b.lon)?a:b);pending.river=nearest.name;pending.sepa=nearest.sepa;document.getElementById('nc-loc').textContent=`${pn} · ${nearest.name}`;}
-  catch(e){pending.lat=56.7014;pending.lon=-3.7261;pending.river='River Tay';pending.sepa='tay';document.getElementById('nc-loc').textContent='Pitlochry (demo)';}
+/* ═══ NEW CATCH / EDIT CATCH ════════════════════════════════════════════════ */
+let _editCatchId=null; // null = new catch, id = editing existing
+
+async function quickLog(ri){
+  _editCatchId=null;
+  pending={river:ri.name,lat:ri.lat,lon:ri.lon,sepa:ri.sepa,ts:Date.now()};
+  showView('newcatch');
+  document.getElementById('nc-title').textContent='Log a catch';
+  document.getElementById('nc-loc').textContent=ri.name;
   await loadCatchForm();
 }
-async function loadCatchForm(){
-  const [wx,rv]=await Promise.all([pending.lat?fetchWx(pending.lat,pending.lon):Promise.resolve(null),pending.sepa?fetchSEPA(pending.sepa):Promise.resolve(null)]);
-  pending.weather=wx;pending.riverData=rv;const now=new Date();const w=wx?.current;
-  document.getElementById('nc-content').innerHTML=`<div class="lbl">Auto-detected conditions</div><div class="cf" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px"><div class="ldc"><div class="k">Location</div><div class="v" style="font-size:11px">${pending.river||'Unknown'}</div></div><div class="ldc"><div class="k">Time</div><div class="v" style="font-size:11px">${fmtT(now)}, ${fmtD(now)}</div></div>${w?`<div class="ldc"><div class="k">Air temp</div><div class="v">${fmtTemp(w.temperature_2m)}</div></div>`:''} ${w?`<div class="ldc"><div class="k">Pressure</div><div class="v">${Math.round(w.surface_pressure)} hPa</div></div>`:''} ${w?`<div class="ldc"><div class="k">Wind</div><div class="v">${windDisplay(w.winddirection_10m,w.windspeed_10m)}</div></div>`:''} ${rv?`<div class="ldc"><div class="k">River level</div><div class="v">${fmtLevel(rv.level)} (${rv.trend})</div></div>`:`<div class="ldc"><div class="k">River level</div><div class="v" style="color:var(--text3)">Not loaded</div></div>`}</div>
+
+async function showNewCatch(){
+  _editCatchId=null;
+  pending={ts:Date.now()};
+  showView('newcatch');
+  document.getElementById('nc-title').textContent='Log a catch';
+  document.getElementById('nc-loc').textContent='Detecting location...';
+  try{
+    const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,enableHighAccuracy:true}));
+    pending.lat=pos.coords.latitude;pending.lon=pos.coords.longitude;
+    const pn=await revGeo(pos.coords.latitude,pos.coords.longitude);
+    const nearest=RIVERS.reduce((a,b)=>gd(pos.coords.latitude,pos.coords.longitude,a.lat,a.lon)<gd(pos.coords.latitude,pos.coords.longitude,b.lat,b.lon)?a:b);
+    pending.river=nearest.name;pending.sepa=nearest.sepa;
+    document.getElementById('nc-loc').textContent=`${pn} · ${nearest.name}`;
+  }catch(e){
+    pending.lat=null;pending.lon=null;pending.river='';pending.sepa=null;
+    document.getElementById('nc-loc').textContent='Location not detected';
+  }
+  await loadCatchForm();
+}
+
+function editCatch(id){
+  const c=catches.find(x=>x.id===id);if(!c)return;
+  _editCatchId=id;
+  pending={river:c.river,lat:c.lat,lon:c.lon,sepa:null,ts:c.timestamp,photoData:c.photo||null};
+  showView('newcatch');
+  document.getElementById('nc-title').textContent='Edit catch';
+  document.getElementById('nc-loc').textContent=c.river||'Unknown location';
+  loadCatchForm(c);
+}
+
+async function loadCatchForm(existing){
+  const now=new Date(pending.ts||Date.now());
+  // Format datetime-local value from timestamp
+  const dtLocal=new Date(now.getTime()-now.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  const ex=existing||{};
+  const selOpt=(val,opts)=>opts.map(o=>`<option${o===val?' selected':''}>${o}</option>`).join('');
+  const methods=['Fly fishing','Spinning','Bait fishing','Nymphing','Dry fly','Wet fly','Trolling'];
+
+  document.getElementById('nc-content').innerHTML=`
+<div class="lbl">When & where</div>
+<div class="card" style="display:flex;flex-direction:column;gap:11px">
+  <div class="fg"><label class="fl">Date & time</label>
+    <input class="fi" id="f-datetime" type="datetime-local" value="${dtLocal}">
+    <div style="font-size:10px;color:var(--text3);margin-top:4px">💡 Upload a photo first — date will be read from the photo automatically</div>
+  </div>
+  <div class="fg"><label class="fl">River / location</label>
+    <input class="fi" id="f-river" type="text" placeholder="e.g. River Tay" value="${ex.river||pending.river||''}">
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <div class="fg"><label class="fl">Latitude</label><input class="fi" id="f-lat" type="number" step="0.0001" placeholder="56.5000" value="${ex.lat||pending.lat||''}"></div>
+    <div class="fg"><label class="fl">Longitude</label><input class="fi" id="f-lon" type="number" step="0.0001" placeholder="-4.0000" value="${ex.lon||pending.lon||''}"></div>
+  </div>
+  <button onclick="useGPSForCatch()" class="bs" style="padding:8px">📍 Use current GPS location</button>
+</div>
 <div class="lbl">Catch details</div>
 <div class="card" style="display:flex;flex-direction:column;gap:11px">
-  <div class="fg"><label class="fl">Species *</label><select class="fsl" id="f-species"><option value="">Select species...</option>${SL_LOG.map(s=>`<option value="${s}">${s}</option>`).join('')}</select></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px"><div class="fg"><label class="fl">Weight (lbs)</label><input class="fi" id="f-weight" type="number" placeholder="e.g. 8.5" step="0.1" min="0"></div><div class="fg"><label class="fl">Length (cm)</label><input class="fi" id="f-length" type="number" placeholder="e.g. 65" min="0"></div></div>
-  <div class="fg"><label class="fl">Fly / lure used</label><input class="fi" id="f-fly" type="text" placeholder="e.g. Cascade size 10"></div>
-  <div class="fg"><label class="fl">Method</label><select class="fsl" id="f-method"><option value="">Select...</option><option>Fly fishing</option><option>Spinning</option><option>Bait fishing</option><option>Nymphing</option><option>Dry fly</option><option>Wet fly</option><option>Trolling</option></select></div>
-  <div class="fg"><label class="fl">Water temperature (°C)</label><input class="fi" id="f-watertemp" type="number" placeholder="e.g. 9" step="0.5"></div>
-  <div style="display:flex;align-items:center;gap:9px"><input type="checkbox" id="f-released" style="width:15px;height:15px;accent-color:var(--accent)"><label for="f-released" style="font-size:13px;color:var(--text2);cursor:pointer">Released (catch & release)</label></div>
-  <div class="fg"><label class="fl">Notes</label><textarea class="fta" id="f-notes" placeholder="Pool fished, conditions, anything notable..."></textarea></div>
+  <div class="fg"><label class="fl">Species *</label>
+    <select class="fsl" id="f-species">
+      <option value="">Select species...</option>
+      ${SL_LOG.map(s=>`<option value="${s}"${s===ex.species?' selected':''}>${s}</option>`).join('')}
+    </select>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px">
+    <div class="fg"><label class="fl">Weight (lbs)</label><input class="fi" id="f-weight" type="number" placeholder="e.g. 8.5" step="0.1" min="0" value="${ex.weight||''}"></div>
+    <div class="fg"><label class="fl">Length (cm)</label><input class="fi" id="f-length" type="number" placeholder="e.g. 65" min="0" value="${ex.length||''}"></div>
+  </div>
+  <div class="fg"><label class="fl">Fly / lure used</label><input class="fi" id="f-fly" type="text" placeholder="e.g. Cascade size 10" value="${ex.fly||''}"></div>
+  <div class="fg"><label class="fl">Method</label>
+    <select class="fsl" id="f-method"><option value="">Select...</option>${selOpt(ex.method||'',methods)}</select>
+  </div>
+  <div class="fg"><label class="fl">Water temperature (°C)</label><input class="fi" id="f-watertemp" type="number" placeholder="e.g. 9" step="0.5" value="${ex.water_temp||''}"></div>
+  <div style="display:flex;align-items:center;gap:9px">
+    <input type="checkbox" id="f-released" style="width:15px;height:15px;accent-color:var(--accent)"${ex.released?' checked':''}>
+    <label for="f-released" style="font-size:13px;color:var(--text2);cursor:pointer">Released (catch & release)</label>
+  </div>
+  <div class="fg"><label class="fl">Notes</label><textarea class="fta" id="f-notes" placeholder="Pool fished, conditions, anything notable...">${ex.notes||''}</textarea></div>
 </div>
 <div class="lbl">Photo (optional)</div>
 <div class="pu" onclick="document.getElementById('f-photo').click()">
-  <div id="pp-prompt"><div style="font-size:26px;margin-bottom:5px">📷</div><div style="font-size:13px;font-weight:500;color:var(--text2)">Tap to add a photo</div><div style="font-size:11px;color:var(--text3);margin-top:3px">Opens camera or photo library · optional</div></div>
-  <img id="pp-img" class="pp" style="display:none">
-  <input type="file" id="f-photo" accept="image/*" capture="environment" style="display:none" onchange="previewPhoto(this)">
+  <div id="pp-prompt" ${pending.photoData?'style="display:none"':''}><div style="font-size:26px;margin-bottom:5px">📷</div><div style="font-size:13px;font-weight:500;color:var(--text2)">Tap to add a photo</div><div style="font-size:11px;color:var(--text3);margin-top:3px">Date, time & GPS will be read from photo automatically</div></div>
+  <img id="pp-img" class="pp" src="${pending.photoData||''}" style="display:${pending.photoData?'block':'none'}">
+  <input type="file" id="f-photo" accept="image/*" style="display:none" onchange="previewPhoto(this)">
 </div>
-<button class="bp" onclick="saveCatch()">Save to catch log</button>
+${pending.photoData?`<button class="bs" onclick="removePhoto()" style="margin-top:-4px;font-size:11px;color:var(--text3)">Remove photo</button>`:''}
+<button class="bp" onclick="saveCatch()">${_editCatchId?'Update catch':'Save to catch log'}</button>
+${_editCatchId?`<button class="bs" style="color:var(--redl);border-color:rgba(201,64,64,.3)" onclick="deleteCatch(${_editCatchId})">Delete catch</button>`:''}
 <button class="bs" onclick="showView('log')">Cancel</button>
 <div style="height:14px"></div>`;
 }
-function previewPhoto(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{document.getElementById('pp-prompt').style.display='none';const img=document.getElementById('pp-img');img.src=e.target.result;img.style.display='block';pending.photoData=e.target.result;};reader.readAsDataURL(file);}
+
+function removePhoto(){pending.photoData=null;loadCatchForm(null);}
+
+async function useGPSForCatch(){
+  try{
+    const pos=await new Promise((res,rej)=>navigator.geolocation.getCurrentPosition(res,rej,{timeout:8000,enableHighAccuracy:true}));
+    document.getElementById('f-lat').value=pos.coords.latitude.toFixed(5);
+    document.getElementById('f-lon').value=pos.coords.longitude.toFixed(5);
+    const pn=await revGeo(pos.coords.latitude,pos.coords.longitude);
+    const nearest=RIVERS.reduce((a,b)=>gd(pos.coords.latitude,pos.coords.longitude,a.lat,a.lon)<gd(pos.coords.latitude,pos.coords.longitude,b.lat,b.lon)?a:b);
+    if(!document.getElementById('f-river').value)document.getElementById('f-river').value=nearest.name;
+    toast('GPS location set ✓');
+  }catch(e){toast('GPS unavailable');}
+}
+
+/* ── EXIF reader — extracts GPS + datetime from JPEG ─────────────────────── */
+function readExif(file){
+  return new Promise(resolve=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const view=new DataView(e.target.result);
+        if(view.getUint16(0)!==0xFFD8){resolve({});return;} // not JPEG
+        let offset=2,len=view.byteLength,marker,size;
+        while(offset<len-1){
+          marker=view.getUint16(offset);
+          if(marker===0xFFE1){// APP1 = EXIF
+            size=view.getUint16(offset+2);
+            const exifStr=String.fromCharCode(...new Uint8Array(e.target.result,offset+4,4));
+            if(exifStr!=='Exif'){offset+=2+size;continue;}
+            const tiff=offset+10;
+            const bigEndian=view.getUint16(tiff)===0x4D4D;
+            const readU16=(o)=>bigEndian?view.getUint16(tiff+o):view.getUint16(tiff+o,true);
+            const readU32=(o)=>bigEndian?view.getUint32(tiff+o):view.getUint32(tiff+o,true);
+            const readRat=(o)=>{const n=readU32(o),d=readU32(o+4);return d?n/d:0;};
+            const ifdOffset=readU32(4);
+            const entries=readU16(ifdOffset);
+            let dt=null,gpsOff=null;
+            for(let i=0;i<entries;i++){
+              const base=ifdOffset+2+i*12;
+              const tag=readU16(base);
+              if(tag===0x8825)gpsOff=readU32(base+8); // GPS IFD pointer
+              if(tag===0x9003||tag===0x0132){ // DateTimeOriginal or DateTime
+                const strOff=readU32(base+8);
+                dt='';for(let j=0;j<19;j++){const ch=view.getUint8(tiff+strOff+j);if(ch===0)break;dt+=String.fromCharCode(ch);}
+              }
+            }
+            let lat=null,lon=null;
+            if(gpsOff){
+              const gc=readU16(gpsOff);
+              let latD=null,latR=null,lonD=null,lonR=null;
+              for(let i=0;i<gc;i++){
+                const base=gpsOff+2+i*12;
+                const tag=readU16(base);
+                const voff=readU32(base+8);
+                if(tag===1){latR=String.fromCharCode(view.getUint8(tiff+voff));}
+                if(tag===2){latD=readRat(voff)+readRat(voff+8)/60+readRat(voff+16)/3600;}
+                if(tag===3){lonR=String.fromCharCode(view.getUint8(tiff+voff));}
+                if(tag===4){lonD=readRat(voff)+readRat(voff+8)/60+readRat(voff+16)/3600;}
+              }
+              if(latD&&lonD){lat=(latR==='S'?-latD:latD);lon=(lonR==='W'?-lonD:lonD);}
+            }
+            resolve({datetime:dt,lat,lon});return;
+          }
+          if(marker===0xFFDA)break; // start of scan
+          offset+=2+view.getUint16(offset+2);
+        }
+        resolve({});
+      }catch(err){resolve({});}
+    };
+    reader.readAsArrayBuffer(file.slice(0,65536)); // read first 64KB for EXIF
+  });
+}
+
+async function previewPhoto(input){
+  const file=input.files[0];if(!file)return;
+  // Read EXIF first
+  const exif=await readExif(file);
+  // Read image data for preview
+  const reader=new FileReader();
+  reader.onload=e=>{
+    pending.photoData=e.target.result;
+    const prompt=document.getElementById('pp-prompt');
+    const img=document.getElementById('pp-img');
+    if(prompt)prompt.style.display='none';
+    if(img){img.src=e.target.result;img.style.display='block';}
+    // Apply EXIF data to form
+    if(exif.datetime){
+      // EXIF datetime format: "YYYY:MM:DD HH:MM:SS" → convert to datetime-local
+      try{
+        const d=exif.datetime.replace(/^(\d{4}):(\d{2}):(\d{2})/,'$1-$2-$3');
+        const dt=new Date(d);
+        if(!isNaN(dt)){
+          const local=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+          const el=document.getElementById('f-datetime');if(el)el.value=local;
+          pending.ts=dt.getTime();
+          toast('📅 Date read from photo');
+        }
+      }catch(ex){}
+    }
+    if(exif.lat&&exif.lon){
+      const latEl=document.getElementById('f-lat');
+      const lonEl=document.getElementById('f-lon');
+      if(latEl)latEl.value=exif.lat.toFixed(5);
+      if(lonEl)lonEl.value=exif.lon.toFixed(5);
+      // Try to find nearest river
+      const nearest=RIVERS.reduce((a,b)=>gd(exif.lat,exif.lon,a.lat,a.lon)<gd(exif.lat,exif.lon,b.lat,b.lon)?a:b);
+      const riverEl=document.getElementById('f-river');
+      if(riverEl&&!riverEl.value)riverEl.value=nearest.name;
+      toast('📍 Location read from photo');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 function saveCatch(){
   const sp=document.getElementById('f-species').value;if(!sp){toast('Please select a species');return;}
-  const w=pending.weather?.current,rv=pending.riverData;
-  catches.push({id:Date.now(),timestamp:Date.now(),species:sp,river:pending.river||'Unknown',lat:pending.lat,lon:pending.lon,weight:document.getElementById('f-weight').value||null,length:document.getElementById('f-length').value||null,fly:document.getElementById('f-fly').value||null,method:document.getElementById('f-method').value||null,water_temp:document.getElementById('f-watertemp').value||null,released:document.getElementById('f-released').checked,notes:document.getElementById('f-notes').value||null,photo:pending.photoData||null,weather_temp:w?Math.round(w.temperature_2m):null,pressure:w?Math.round(w.surface_pressure):null,river_level:rv?rv.level.toFixed(2):null,river_trend:rv?rv.trend:null});
-  sv();toast(`${sp} logged! 🎣`);showView('log');
+  const dtVal=document.getElementById('f-datetime').value;
+  const ts=dtVal?new Date(dtVal).getTime():Date.now();
+  const riverVal=document.getElementById('f-river').value||pending.river||'Unknown';
+  const lat=parseFloat(document.getElementById('f-lat').value)||pending.lat||null;
+  const lon=parseFloat(document.getElementById('f-lon').value)||pending.lon||null;
+  const entry={
+    id:_editCatchId||Date.now(),
+    timestamp:isNaN(ts)?Date.now():ts,
+    species:sp,river:riverVal,lat,lon,
+    weight:document.getElementById('f-weight').value||null,
+    length:document.getElementById('f-length').value||null,
+    fly:document.getElementById('f-fly').value||null,
+    method:document.getElementById('f-method').value||null,
+    water_temp:document.getElementById('f-watertemp').value||null,
+    released:document.getElementById('f-released').checked,
+    notes:document.getElementById('f-notes').value||null,
+    photo:pending.photoData||null,
+    weather_temp:null,pressure:null,river_level:null,river_trend:null
+  };
+  if(_editCatchId){
+    // Preserve old weather data if editing
+    const old=catches.find(x=>x.id===_editCatchId);
+    if(old){entry.weather_temp=old.weather_temp;entry.pressure=old.pressure;entry.river_level=old.river_level;entry.river_trend=old.river_trend;}
+    const idx=catches.findIndex(x=>x.id===_editCatchId);
+    if(idx>=0)catches[idx]=entry;
+    toast('Catch updated ✓');
+  }else{
+    catches.push(entry);
+    toast(`${sp} logged! 🎣`);
+  }
+  sv();showView('log');
+}
+
+function deleteCatch(id){
+  if(!confirm('Delete this catch?'))return;
+  catches=catches.filter(x=>x.id!==id);
+  sv();toast('Catch deleted');showView('log');
 }
 
 /* SPECIES VIEW */
