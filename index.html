@@ -852,14 +852,14 @@ const SPECIES_DATA={
   atlantic_salmon:{name:'Atlantic Salmon',icon:'🐟',color:'#4a9e6a',season:'Feb – Oct',bestMonths:'April, May, September, October',
     desc:'The king of Scottish game fish. Runs vary by river and water height. A fresh run fish in good conditions is the ultimate prize.',
     tactics:[{k:'Early season line',v:'Sink tip or full sinking'},{k:'Summer line',v:'Floating or intermediate'},{k:'Cold water fly',v:'Cascade, Willie Gunn, Garry Dog'},{k:'Warm water fly',v:"Stoat's Tail, Blue Charm, Munro Killer"},{k:'Fly size cold',v:'Size 4–8 tube or single'},{k:'Fly size warm',v:'Size 10–14 single or double'},{k:'Best conditions',v:'Falling river after a fresh'},{k:'Best time',v:'Early morning & evening'},{k:'Trigger temp',v:'From 6°C; optimal 10–14°C'},{k:'Leader',v:'12–15 lb fluoro, 9–12 ft'}]},
-  sea_trout:{name:'Sea Trout',icon:'🐟',color:'#1D9E75',season:'May – September',bestMonths:'June, July, August',
-    desc:'Night fishing is the traditional method. A warm June night on a Highland river is unforgettable.',
+  sea_trout:{name:'Sea Trout',icon:'🐟',color:'#1D9E75',season:'Feb – Oct',bestMonths:'June, July, August',
+    desc:'Night fishing is the traditional method. A warm June night on a Highland river is unforgettable. Runs broadly follow salmon, with sea trout present from February through to October.',
     tactics:[{k:'Method',v:'Floating line, fish at night'},{k:'Best time',v:'1–2 hours after dark; midnight'},{k:'Flies',v:'Teal Blue & Silver, Medicine, Butcher'},{k:'Fly size',v:'Size 8–12 single'},{k:'Leader',v:'8–12 lb fluoro, 10–12 ft'},{k:'Water temp',v:'Best 10–16°C'},{k:'Conditions',v:'Dark cloudy nights; avoid moonlight'}]},
   brown_trout:{name:'Brown Trout',icon:'🐟',color:'#c8922a',season:'March – October',bestMonths:'May, June, September',
     desc:"Scotland's most widespread game fish — from highland burns to productive lowland rivers. Responds beautifully to the dry fly.",
     tactics:[{k:'Method',v:'Dry fly, nymph, or wet fly'},{k:'Best time',v:'Evening rise (7–9pm)'},{k:'Dry flies',v:'Elk Hair Caddis, Adams, Klinkhamer'},{k:'Nymphs',v:"Hare's Ear, PTN, Copper John"},{k:'Wet flies',v:"Greenwell's Glory, Partridge & Orange"},{k:'Tippet',v:'3–5 lb fluorocarbon'},{k:'Water temp',v:'Optimal 12–18°C'}]},
-  grayling:{name:'Grayling',icon:'🐟',color:'#7F77DD',season:'October – February',bestMonths:'November, December, January',
-    desc:"The lady of the stream. Scotland's winter fish. Challenging and deeply satisfying on a frosty Borders or Perthshire day.",
+  grayling:{name:'Grayling',icon:'🐟',color:'#7F77DD',season:'Year-round (avoid Mar–Apr)',bestMonths:'November, December, January',
+    desc:"The lady of the stream. Present year-round on most Scottish rivers but should not be targeted in March and April during spawning. Winter fishing is at its best.",
     tactics:[{k:'Method',v:'Czech/French nymph or dry fly'},{k:'Best time',v:'Midday when temp is highest'},{k:'Nymphs',v:'Heavy jig nymph, Tungsten PTN'},{k:'Dry flies',v:'F-fly, CDC Shuttlecock, Klinkhamer'},{k:'Tippet',v:'2–4 lb fine fluorocarbon'},{k:'Water temp',v:'Best 4–10°C'},{k:'Key rivers',v:'Tay, Clyde, Tweed, Earn, Allan'}]},
   rainbow_trout:{name:'Rainbow Trout',icon:'🐟',color:'#6ab4e8',season:'Year-round (stillwater)',bestMonths:'April, May, October',
     desc:'Mainly stocked in stillwater fisheries. Hard-fighting and great fun. An excellent introduction to fly fishing.',
@@ -1104,45 +1104,106 @@ function fmtRvTime(ts){
 }
 function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
 async function shareApp(){
-  // Build a text summary of the current visible page
-  const title=document.getElementById('here-title')?.textContent||'Ghillie';
-  const sub=document.getElementById('here-sub')?.textContent||'';
-  const tab=document.querySelector('.itab.on')?.textContent||'Now';
-
-  // Gather key values from the current view
-  const lines=[`🎣 ${title}`,sub?`📍 ${sub}`:''];
-  // Go/no-go score
-  const ring=document.querySelector('.ring');
-  const ringLabel=document.querySelector('.card .sw div div');
-  if(ring&&ringLabel)lines.push(`\n✅ ${ringLabel.textContent} (${ring.textContent}/10)`);
-  // River level
-  const lvl=document.querySelector('[style*="21px"]');
-  const badge=document.querySelector('.badge.bn,.badge.bg,.badge.bc');
-  if(lvl&&badge)lines.push(`💧 ${lvl.textContent.trim()} — ${badge.textContent.trim()}`);
-  // Conditions notes
-  const notes=document.querySelectorAll('.card .sw p');
-  notes.forEach(n=>{if(n.textContent.trim())lines.push(`   ${n.textContent.trim()}`)});
-  // Weather
-  const mets=document.querySelectorAll('.met');
-  const wx=[];mets.forEach(m=>{const v=m.querySelector('.mv'),l=m.querySelector('.ml');if(v&&l)wx.push(`${l.textContent}: ${v.textContent.trim()}`)});
-  if(wx.length)lines.push('\n🌤 '+wx.slice(0,4).join(' · '));
-  lines.push(`\nView full conditions: ${window.location.href.split('?')[0]}`);
-  lines.push('Powered by Ghillie 🎣');
-
-  const text=lines.filter(Boolean).join('\n');
-
-  if(navigator.share){
-    try{
-      await navigator.share({title:`Ghillie — ${title}`,text});
-      return;
-    }catch(e){if(e.name==='AbortError')return;}
-  }
-  // Fallback — copy text to clipboard
+  // Build canvas screenshot of current conditions
   try{
-    await navigator.clipboard.writeText(text);
-    toast('Summary copied to clipboard ✓');
-  }catch(e){
-    toast('Share not available on this browser');
+    const canvas=document.createElement('canvas');
+    const dpr=Math.min(window.devicePixelRatio||2,2);
+    const W=390,H=700;
+    canvas.width=W*dpr;canvas.height=H*dpr;
+    const ctx=canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+
+    // Background
+    ctx.fillStyle='#0e1a12';ctx.fillRect(0,0,W,H);
+
+    // Header bar
+    ctx.fillStyle='#152019';ctx.fillRect(0,0,W,56);
+    ctx.fillStyle='#7dc49a';ctx.font='bold 18px -apple-system,sans-serif';ctx.textAlign='left';
+    ctx.fillText('Ghillie',16,34);
+    const titleEl=document.getElementById('here-title');
+    const subEl=document.getElementById('here-sub');
+    if(titleEl){ctx.fillStyle='#e8f0e9';ctx.font='bold 15px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(titleEl.textContent.trim(),W-16,26);}
+    if(subEl){ctx.fillStyle='#5a7060';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(subEl.textContent.trim().slice(0,50),W-16,42);}
+
+    let y=72;
+    const lbl=(text)=>{ctx.fillStyle='#5a7060';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(text.toUpperCase(),16,y);y+=16;};
+    const card=(fn)=>{ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,0,6);const startY=y;fn();const endY=y+12;ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,startY-4,W-24,endY-startY+8,6);ctx.fill();y=endY+10;};
+    const row=(label,value,col)=>{ctx.fillStyle='#5a7060';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(label,24,y);ctx.fillStyle=col||'#8fa892';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(String(value).slice(0,40),W-24,y);y+=18;};
+
+    // Go/No-Go score
+    const scoreEl=document.querySelector('.ring');
+    const labelEl=document.querySelector('.card .sw div div');
+    const notesEl=document.querySelector('.card .sw p');
+    if(scoreEl&&labelEl){
+      lbl('Go / No-Go');
+      const score=scoreEl.textContent.trim();
+      const sc=parseInt(score)||5;
+      const col=sc>=7?'#7dc49a':sc>=4?'#c8922a':'#e05555';
+      ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,66,6);ctx.fill();
+      ctx.fillStyle=col;ctx.beginPath();ctx.arc(42,y+33,24,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#0e1a12';ctx.font='bold 18px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(score,42,y+39);
+      ctx.fillStyle='#e8f0e9';ctx.font='bold 13px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(labelEl.textContent.trim().slice(0,30),74,y+27);
+      if(notesEl){ctx.fillStyle='#5a7060';ctx.font='10px -apple-system,sans-serif';ctx.fillText(notesEl.textContent.trim().slice(0,55),74,y+44);}
+      y+=78;
+    }
+
+    // River level
+    const lvlEl=document.querySelector('[style*="font-size:21px"]')||document.querySelector('.card [style*="500;font-family"]');
+    const badgeEl=document.querySelector('.badge.bn,.badge.bg,.badge.bc');
+    const trendEl=document.querySelector('[class*="t-"]');
+    if(lvlEl){
+      lbl('River Level');
+      ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,52,6);ctx.fill();
+      ctx.fillStyle='#e8f0e9';ctx.font='bold 20px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(lvlEl.textContent.trim(),22,y+30);
+      if(badgeEl){const bc=badgeEl.classList.contains('bn')?'#e05555':badgeEl.classList.contains('bg')?'#7dc49a':'#c8922a';ctx.fillStyle=bc;ctx.font='bold 11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(badgeEl.textContent.trim(),W-22,y+30);}
+      if(trendEl){ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText('Trend: '+trendEl.textContent.trim(),22,y+46);}
+      y+=62;
+    }
+
+    // Weather grid
+    const mets=document.querySelectorAll('.met');
+    if(mets.length){
+      lbl('Weather');
+      ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,54,6);ctx.fill();
+      const items=[...mets].slice(0,4).map(m=>({v:m.querySelector('.mv')?.textContent?.trim()||'',l:m.querySelector('.ml')?.textContent?.trim()||''}));
+      const colW=(W-24)/items.length;
+      items.forEach((it,i)=>{
+        const cx=12+i*colW+colW/2;
+        ctx.fillStyle='#e8f0e9';ctx.font='bold 12px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(it.v.slice(0,8),cx,y+24);
+        ctx.fillStyle='#5a7060';ctx.font='9px -apple-system,sans-serif';ctx.fillText(it.l.slice(0,10),cx,y+40);
+      });
+      y+=64;
+    }
+
+    // Wind row if gusty
+    const gustEl=document.querySelector('[style*="Gusts up to"]')||[...document.querySelectorAll('div')].find(d=>d.textContent.includes('Gusts up to')&&d.style.fontSize==='11px');
+    if(gustEl){ctx.fillStyle='#c8922a';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText('💨 '+gustEl.textContent.trim(),16,y);y+=18;}
+
+    // Timestamp
+    const updEl=document.querySelector('[style*="Updated"]');
+    const updText=updEl?updEl.textContent.trim():'';
+    y=H-24;
+    ctx.fillStyle='#3d5c45';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='center';
+    ctx.fillText(`Ghillie · ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`,W/2,y);
+
+    // Convert to blob and share
+    canvas.toBlob(async(blob)=>{
+      if(!blob){toast('Could not generate image');return;}
+      const file=new File([blob],'ghillie-conditions.png',{type:'image/png'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{await navigator.share({files:[file],title:'Ghillie — Fishing Conditions'});return;}catch(e){if(e.name==='AbortError')return;}
+      }
+      // Fallback — download
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='ghillie-conditions.png';a.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    },'image/png');
+  }catch(err){
+    // Final fallback — text share
+    const title=document.getElementById('here-title')?.textContent||'Ghillie';
+    const text=`🎣 Ghillie — ${title}\n${document.getElementById('here-sub')?.textContent||''}\n\n${window.location.href.split('?')[0]}`;
+    if(navigator.share){try{await navigator.share({title:'Ghillie',text});return;}catch(e){}}
+    try{await navigator.clipboard.writeText(text);toast('Copied to clipboard ✓');}catch(e){}
   }
 }
 function sv(){localStorage.setItem('g_catches',JSON.stringify(catches));localStorage.setItem('g_favrivers',JSON.stringify(favRivers));localStorage.setItem('g_favlocs',JSON.stringify(favLocs));}
@@ -1212,7 +1273,11 @@ function buildContextualTactics(river,w,rv,st,waterTemp,p6h){
   // Determine dominant species for season
   let sp,spName;
   if(month>=9||month<=1){sp='grayling';spName='Grayling';}
+  // Sea trout follows salmon season Feb-Oct; grayling year-round except Mar-Apr spawning
+  if(month>=9||month<=1){sp='grayling';spName='Grayling';}
+  else if(month===3||month===4){sp='brown_trout';spName='Brown Trout';} // grayling spawning — target trout
   else if(month>=5&&month<=8){sp='sea_trout';spName='Sea Trout';}
+  else if(month>=2&&month<=4){sp='atlantic_salmon';spName='Atlantic Salmon';}
   else if(month>=2&&month<=4){sp='brown_trout';spName='Brown Trout';}
   else{sp='atlantic_salmon';spName='Atlantic Salmon';}
 
@@ -1800,6 +1865,8 @@ function buildNow(river,distKm,wx,rv,cond,st,lat,lon,alerts,hourly,fc,cacheTs){
   const hasCat=river.cat&&CATCHMENTS[river.cat]&&CATCHMENTS[river.cat].length>1;
   const isSaved=favLocs.some(f=>f.river===river.name);
   const sid=river.name.replace(/[^a-z0-9]/gi,'_');
+  const userMapLat=(lat||56.5).toFixed(6);
+  const userMapLon=(lon||-4.0).toFixed(6);
   const gaugeMapLat=(st?.glat||lat).toFixed(6);
   const gaugeMapLon=(st?.glon||lon).toFixed(6);
   const gaugeLabel=encodeURIComponent(gaugeName!=='—'?gaugeName:river.name);
@@ -1871,10 +1938,10 @@ ${hourlyHTML}`:`<div class="err">Weather unavailable</div>`}
   ${tactics.lines.map(a=>`<div class="tr2"><span class="tk">${a.k}</span><span class="tv" style="max-width:60%;text-align:right">${a.v}</span></div>`).join('')}
 </div>
 </div>
-<div class="lbl">Open in maps — ${gaugeName!=='—'?gaugeName:river.name}</div>
+<div class="lbl">Open in maps — your location</div>
 <div class="maplinks">
-  <a href="https://www.google.com/maps?q=${gaugeMapLat},${gaugeMapLon}&label=${gaugeLabel}" class="map-g" target="_blank">Google Maps</a>
-  <a href="https://maps.apple.com/?ll=${gaugeMapLat},${gaugeMapLon}&q=${gaugeLabel}" class="map-a" target="_blank">Apple Maps</a>
+  <a href="https://www.google.com/maps?q=${userMapLat},${userMapLon}" class="map-g" target="_blank">Google Maps</a>
+  <a href="https://maps.apple.com/?ll=${userMapLat},${userMapLon}&q=My+Location" class="map-a" target="_blank">Apple Maps</a>
 </div>
 <div class="lbl">Species on ${river.name}</div>
 <div id="species-cards-${river.name.replace(/[^a-z0-9]/gi,'').toLowerCase()}"></div>
@@ -1895,8 +1962,12 @@ function renderSpeciesCards(river){
     'grayling':'grayling','rainbow trout':'rainbow_trout','pike':'pike'
   };
   const seasonFor={
-    atlantic_salmon:[2,3,4,5,6,7,8,9,10],sea_trout:[5,6,7,8,9],brown_trout:[3,4,5,6,7,8,9,10],
-    grayling:[10,11,12,1,2],rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],pike:[10,11,12,1,2,3]
+    atlantic_salmon:[2,3,4,5,6,7,8,9,10],
+    sea_trout:[2,3,4,5,6,7,8,9,10], // same run timing as salmon
+    brown_trout:[3,4,5,6,7,8,9,10],
+    grayling:[1,2,5,6,7,8,9,10,11,12], // year-round but avoid March(3) and April(4) spawning
+    rainbow_trout:[1,2,3,4,5,6,7,8,9,10,11,12],
+    pike:[10,11,12,1,2,3]
   };
   const riverSpecies=(river.species||'').split(',').map(s=>s.trim()).filter(s=>s&&s!=='—');
   if(!riverSpecies.length){el.innerHTML='';return;}
@@ -1995,7 +2066,7 @@ function buildHourly(h, fc){
       <div class="hs">${Math.round(h.surface_pressure?.[i]||1013)}hPa</div>
     </div>`;
   }).filter(Boolean).join('');
-  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▼</span></div><div id="hourly-section" style="display:none"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure · ☀️↑↓ = sunrise/sunset</div></div>`;
+  return`<div onclick="toggleHourly()" style="cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:2px 0"><div class="lbl" style="margin:0">Hourly — 3h back · 8h ahead</div><span id="hourly-arr" style="font-size:12px;color:var(--text3)">▲</span></div><div id="hourly-section"><div class="hscroll">${cells}</div><div style="font-size:10px;color:var(--text3);margin-top:4px">Temp · Rain · Wind (↑ gusts) · Pressure · ☀️↑↓ = sunrise/sunset</div></div>`;
 }
 function toggleHourly(){const s=document.getElementById('hourly-section'),a=document.getElementById('hourly-arr');if(!s)return;const op=s.style.display!=='none';s.style.display=op?'none':'block';if(a)a.textContent=op?'▼':'▲';}
 function toggleConditions(){const s=document.getElementById('cond-section'),a=document.getElementById('cond-arr');if(!s)return;const op=s.style.display!=='none';s.style.display=op?'none':'block';if(a)a.textContent=op?'▼':'▲';}
