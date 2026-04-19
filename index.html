@@ -1104,107 +1104,249 @@ function fmtRvTime(ts){
 }
 function toast(msg,dur=2500){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),dur);}
 async function shareApp(){
-  // Build canvas screenshot of current conditions
   try{
-    const canvas=document.createElement('canvas');
-    const dpr=Math.min(window.devicePixelRatio||2,2);
-    const W=390,H=700;
-    canvas.width=W*dpr;canvas.height=H*dpr;
-    const ctx=canvas.getContext('2d');
-    ctx.scale(dpr,dpr);
+    const tab=curHTab||'now';
+    let blob;
+    if(tab==='forecast') blob=await shareCanvasForecast();
+    else if(tab==='river') blob=await shareCanvasRiver();
+    else blob=await shareCanvasNow();
 
-    // Background
-    ctx.fillStyle='#0e1a12';ctx.fillRect(0,0,W,H);
-
-    // Header bar
-    ctx.fillStyle='#152019';ctx.fillRect(0,0,W,56);
-    ctx.fillStyle='#7dc49a';ctx.font='bold 18px -apple-system,sans-serif';ctx.textAlign='left';
-    ctx.fillText('Ghillie',16,34);
-    const titleEl=document.getElementById('here-title');
-    const subEl=document.getElementById('here-sub');
-    if(titleEl){ctx.fillStyle='#e8f0e9';ctx.font='bold 15px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(titleEl.textContent.trim(),W-16,26);}
-    if(subEl){ctx.fillStyle='#5a7060';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(subEl.textContent.trim().slice(0,50),W-16,42);}
-
-    let y=72;
-    const lbl=(text)=>{ctx.fillStyle='#5a7060';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(text.toUpperCase(),16,y);y+=16;};
-    const card=(fn)=>{ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,0,6);const startY=y;fn();const endY=y+12;ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,startY-4,W-24,endY-startY+8,6);ctx.fill();y=endY+10;};
-    const row=(label,value,col)=>{ctx.fillStyle='#5a7060';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(label,24,y);ctx.fillStyle=col||'#8fa892';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(String(value).slice(0,40),W-24,y);y+=18;};
-
-    // Go/No-Go score
-    const scoreEl=document.querySelector('.ring');
-    const labelEl=document.querySelector('.card .sw div div');
-    const notesEl=document.querySelector('.card .sw p');
-    if(scoreEl&&labelEl){
-      lbl('Go / No-Go');
-      const score=scoreEl.textContent.trim();
-      const sc=parseInt(score)||5;
-      const col=sc>=7?'#7dc49a':sc>=4?'#c8922a':'#e05555';
-      ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,66,6);ctx.fill();
-      ctx.fillStyle=col;ctx.beginPath();ctx.arc(42,y+33,24,0,Math.PI*2);ctx.fill();
-      ctx.fillStyle='#0e1a12';ctx.font='bold 18px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(score,42,y+39);
-      ctx.fillStyle='#e8f0e9';ctx.font='bold 13px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(labelEl.textContent.trim().slice(0,30),74,y+27);
-      if(notesEl){ctx.fillStyle='#5a7060';ctx.font='10px -apple-system,sans-serif';ctx.fillText(notesEl.textContent.trim().slice(0,55),74,y+44);}
-      y+=78;
+    if(!blob){toast('Nothing to share yet — load a river first');return;}
+    const river=hereData.river?.name||'Conditions';
+    const file=new File([blob],`ghillie-${tab}.png`,{type:'image/png'});
+    if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:`Ghillie — ${river}`});return;}
+      catch(e){if(e.name==='AbortError')return;}
     }
-
-    // River level
-    const lvlEl=document.querySelector('[style*="font-size:21px"]')||document.querySelector('.card [style*="500;font-family"]');
-    const badgeEl=document.querySelector('.badge.bn,.badge.bg,.badge.bc');
-    const trendEl=document.querySelector('[class*="t-"]');
-    if(lvlEl){
-      lbl('River Level');
-      ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,52,6);ctx.fill();
-      ctx.fillStyle='#e8f0e9';ctx.font='bold 20px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(lvlEl.textContent.trim(),22,y+30);
-      if(badgeEl){const bc=badgeEl.classList.contains('bn')?'#e05555':badgeEl.classList.contains('bg')?'#7dc49a':'#c8922a';ctx.fillStyle=bc;ctx.font='bold 11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(badgeEl.textContent.trim(),W-22,y+30);}
-      if(trendEl){ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText('Trend: '+trendEl.textContent.trim(),22,y+46);}
-      y+=62;
-    }
-
-    // Weather grid
-    const mets=document.querySelectorAll('.met');
-    if(mets.length){
-      lbl('Weather');
-      ctx.fillStyle='#1e2d22';ctx.beginPath();ctx.roundRect(12,y,W-24,54,6);ctx.fill();
-      const items=[...mets].slice(0,4).map(m=>({v:m.querySelector('.mv')?.textContent?.trim()||'',l:m.querySelector('.ml')?.textContent?.trim()||''}));
-      const colW=(W-24)/items.length;
-      items.forEach((it,i)=>{
-        const cx=12+i*colW+colW/2;
-        ctx.fillStyle='#e8f0e9';ctx.font='bold 12px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(it.v.slice(0,8),cx,y+24);
-        ctx.fillStyle='#5a7060';ctx.font='9px -apple-system,sans-serif';ctx.fillText(it.l.slice(0,10),cx,y+40);
-      });
-      y+=64;
-    }
-
-    // Wind row if gusty
-    const gustEl=document.querySelector('[style*="Gusts up to"]')||[...document.querySelectorAll('div')].find(d=>d.textContent.includes('Gusts up to')&&d.style.fontSize==='11px');
-    if(gustEl){ctx.fillStyle='#c8922a';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText('💨 '+gustEl.textContent.trim(),16,y);y+=18;}
-
-    // Timestamp
-    const updEl=document.querySelector('[style*="Updated"]');
-    const updText=updEl?updEl.textContent.trim():'';
-    y=H-24;
-    ctx.fillStyle='#3d5c45';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='center';
-    ctx.fillText(`Ghillie · ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`,W/2,y);
-
-    // Convert to blob and share
-    canvas.toBlob(async(blob)=>{
-      if(!blob){toast('Could not generate image');return;}
-      const file=new File([blob],'ghillie-conditions.png',{type:'image/png'});
-      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
-        try{await navigator.share({files:[file],title:'Ghillie — Fishing Conditions'});return;}catch(e){if(e.name==='AbortError')return;}
-      }
-      // Fallback — download
-      const url=URL.createObjectURL(blob);
-      const a=document.createElement('a');a.href=url;a.download='ghillie-conditions.png';a.click();
-      setTimeout(()=>URL.revokeObjectURL(url),1000);
-    },'image/png');
+    // Fallback — download
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`ghillie-${tab}.png`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
   }catch(err){
-    // Final fallback — text share
-    const title=document.getElementById('here-title')?.textContent||'Ghillie';
-    const text=`🎣 Ghillie — ${title}\n${document.getElementById('here-sub')?.textContent||''}\n\n${window.location.href.split('?')[0]}`;
-    if(navigator.share){try{await navigator.share({title:'Ghillie',text});return;}catch(e){}}
-    try{await navigator.clipboard.writeText(text);toast('Copied to clipboard ✓');}catch(e){}
+    console.error('Share error:',err);
+    toast('Share unavailable');
   }
+}
+
+/* ── Canvas helpers ── */
+function _shareCtx(W,H){
+  const canvas=document.createElement('canvas');
+  const dpr=Math.min(window.devicePixelRatio||2,2);
+  canvas.width=W*dpr;canvas.height=H*dpr;
+  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);
+  return{canvas,ctx,W,H};
+}
+function _shareHeader(ctx,W,river,sub){
+  ctx.fillStyle='#152019';ctx.fillRect(0,0,W,52);
+  ctx.fillStyle='#7dc49a';ctx.font='bold 15px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText('Ghillie 🎣',14,32);
+  if(river){ctx.fillStyle='#e8f0e9';ctx.font='bold 13px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(river.slice(0,28),W-14,24);}
+  if(sub){ctx.fillStyle='#5a7060';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(sub.slice(0,38),W-14,40);}
+  return 58;
+}
+function _shareFooter(ctx,W,H){
+  ctx.fillStyle='rgba(21,32,25,.9)';ctx.fillRect(0,H-22,W,22);
+  ctx.fillStyle='#3d5c45';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='center';
+  ctx.fillText(`Ghillie · ${new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})} ${new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}`,W/2,H-7);
+}
+function _toBlob(canvas){return new Promise(r=>canvas.toBlob(r,'image/png'));}
+
+async function shareCanvasNow(){
+  const d=hereData;if(!d.wx&&!d.rv)return null;
+  const river=d.river?.name||'';
+  const sub=document.getElementById('here-sub')?.textContent||'';
+  const {canvas,ctx,W,H}=_shareCtx(390,640);
+  ctx.fillStyle='#0e1a12';ctx.fillRect(0,0,W,H);
+  let y=_shareHeader(ctx,W,river,sub);
+
+  const lbl=(t)=>{ctx.fillStyle='#5a7060';ctx.font='8px -apple-system,sans-serif';ctx.textAlign='left';
+    ctx.fillText(t.toUpperCase(),14,y+10);y+=18;};
+  const box=(h,fn)=>{ctx.fillStyle='#1a2e1f';ctx.beginPath();ctx.roundRect(12,y,W-24,h,7);ctx.fill();
+    ctx.strokeStyle='#2a3d2e';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(12,y,W-24,h,7);ctx.stroke();
+    fn(y);y+=h+8;};
+
+  // Go/No-Go
+  const sc=hereData.wx?scoreNow(d.wx?.current,d.rv,d.st?.nMax,calc6hPressureTrend(d.wx?.hourly)):null;
+  if(sc){
+    lbl('Go / No-Go');
+    box(72,by=>{
+      const col=sc.score>=7?'#4a9e6a':sc.score>=4?'#c8922a':'#c04040';
+      ctx.fillStyle=col+'33';ctx.beginPath();ctx.arc(46,by+36,26,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle=col;ctx.lineWidth=2;ctx.beginPath();ctx.arc(46,by+36,26,0,Math.PI*2);ctx.stroke();
+      ctx.fillStyle=col;ctx.font='bold 20px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(sc.score,46,by+43);
+      ctx.fillStyle='#e8f0e9';ctx.font='bold 13px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(sc.label,82,by+28);
+      ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';
+      const notes=sc.notes.slice(0,2).join(' · ');
+      ctx.fillText(notes.slice(0,52),82,by+48);
+      ctx.fillStyle=col;ctx.font='10px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(`${sc.score}/10`,W-22,by+28);
+    });
+  }
+
+  // River level
+  if(d.rv){
+    lbl('River Level — '+(d.st?.gauge||''));
+    box(64,by=>{
+      const ls=lvStat(d.rv.level,d.st?.nMax||3,d.rv.trend);
+      const col=ls.cls==='bn'?'#c04040':ls.cls==='bg'?'#4a9e6a':'#c8922a';
+      ctx.fillStyle='#e8f0e9';ctx.font='bold 22px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(fmtLevel(d.rv.level),22,by+34);
+      ctx.fillStyle=col;ctx.font='bold 11px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(ls.text,W-22,by+28);
+      ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(`Trend: ${d.rv.trend} · nMax: ${fmtNMax(d.st?.nMax||3)}`,22,by+52);
+    });
+  }
+
+  // Weather grid
+  if(d.wx?.current){
+    const w=d.wx.current;
+    lbl('Weather');
+    box(64,by=>{
+      const items=[
+        {l:'Air temp',v:fmtTemp(w.temperature_2m)},
+        {l:'Water temp',v:d.wx.hourly?fmtTemp(getWaterTemp(d.wx.hourly)):'—'},
+        {l:'Wind',v:wDir(w.winddirection_10m)+' '+fmtWind(w.windspeed_10m)},
+        {l:'Pressure',v:Math.round(w.surface_pressure)+' hPa'},
+      ];
+      const cw=(W-24)/4;
+      items.forEach((it,i)=>{
+        const cx=12+i*cw+cw/2;
+        ctx.fillStyle='#e8f0e9';ctx.font='bold 11px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(it.v.slice(0,9),cx,by+28);
+        ctx.fillStyle='#5a7060';ctx.font='9px -apple-system,sans-serif';ctx.fillText(it.l,cx,by+46);
+      });
+    });
+  }
+
+  // Conditions tactics
+  const tactics=d.wx&&d.river?buildContextualTactics(d.river,d.wx?.current,d.rv,d.st,getWaterTemp(d.wx?.hourly),calc6hPressureTrend(d.wx?.hourly)):null;
+  if(tactics&&tactics.lines.length){
+    lbl('Conditions — '+tactics.spName);
+    const rows=tactics.lines.slice(0,4);
+    box(rows.length*20+8,by=>{
+      rows.forEach((r,i)=>{
+        ctx.fillStyle='#5a7060';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(r.k,22,by+16+i*20);
+        ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='right';ctx.fillText(r.v.slice(0,36),W-22,by+16+i*20);
+      });
+    });
+  }
+
+  _shareFooter(ctx,W,H);
+  return _toBlob(canvas);
+}
+
+async function shareCanvasForecast(){
+  const d=hereData;if(!d.fc?.daily)return null;
+  const river=d.river?.name||'';
+  const fc=d.fc;const daily=fc.daily;
+  const days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const today=new Date().toISOString().slice(0,10);
+  const lag=d.st?.lag||18;
+
+  const H=80+daily.time.length*52+30;
+  const {canvas,ctx,W}=_shareCtx(390,H);
+  ctx.fillStyle='#0e1a12';ctx.fillRect(0,0,W,H);
+  let y=_shareHeader(ctx,W,river,'7-day fishing forecast');
+
+  daily.time.forEach((date,i)=>{
+    const lagDays=Math.ceil(lag/24);
+    const laggedRain=i>=lagDays?daily.precipitation_sum[i-lagDays]:0;
+    const rain1dAgo=i>=1?daily.precipitation_sum[i-1]:0;
+    const rain2dAgo=i>=2?daily.precipitation_sum[i-2]:0;
+    const rain3dAgo=i>=3?daily.precipitation_sum[i-3]:0;
+    const sc=scoreDay({rain:daily.precipitation_sum[i],laggedRain,rain1dAgo,rain2dAgo,rain3dAgo,
+      wind:daily.windspeed_10m_max[i],gusts:daily.windgusts_10m_max?.[i]||0,
+      pressure:daily.surface_pressure_mean?.[i]||1013,
+      hi:daily.temperature_2m_max[i],lo:daily.temperature_2m_min[i]});
+    const col=sc>=7?'#4a9e6a':sc>=4?'#c8922a':'#c04040';
+    const dn=date===today?'Today':days[new Date(date+'T12:00:00').getDay()];
+    const icon=wxI(daily.weathercode[i]);
+
+    // Row background
+    ctx.fillStyle=date===today?'#1a2e22':'#152019';
+    ctx.beginPath();ctx.roundRect(12,y,W-24,44,6);ctx.fill();
+
+    // Day name
+    ctx.fillStyle=date===today?'#7dc49a':'#8fa892';ctx.font='bold 12px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(dn,22,y+18);
+    // Icon
+    ctx.font='16px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(icon,70,y+20);
+    // Temps
+    ctx.fillStyle='#e8f0e9';ctx.font='11px -apple-system,sans-serif';ctx.textAlign='left';
+    ctx.fillText(`${fmtTemp(daily.temperature_2m_max[i])} / ${fmtTemp(daily.temperature_2m_min[i])}`,100,y+18);
+    // Rain
+    ctx.fillStyle='#6ab4e8';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(fmtRain(daily.precipitation_sum[i]),200,y+18);
+    // Wind
+    ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';
+    ctx.fillText(fmtWind(daily.windspeed_10m_max[i]),258,y+18);
+    // Score pill
+    ctx.fillStyle=col+'33';ctx.beginPath();ctx.roundRect(W-60,y+8,48,26,6);ctx.fill();
+    ctx.strokeStyle=col;ctx.lineWidth=1;ctx.beginPath();ctx.roundRect(W-60,y+8,48,26,6);ctx.stroke();
+    ctx.fillStyle=col;ctx.font='bold 11px -apple-system,sans-serif';ctx.textAlign='center';
+    ctx.fillText(sc>=7?'Go':sc>=4?'Fair':'No go',W-36,y+26);
+    // River note
+    if(laggedRain>15&&i>0){ctx.fillStyle='#6ab4e8';ctx.font='9px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText('🌊 river raised by earlier rain',22,y+38);}
+    y+=50;
+  });
+
+  _shareFooter(ctx,W,H);
+  return _toBlob(canvas);
+}
+
+async function shareCanvasRiver(){
+  const d=hereData;if(!d.rv?.history)return null;
+  const river=d.river?.name||'';
+  const rv=d.rv;const st=d.st;
+
+  const H=400;
+  const {canvas,ctx,W}=_shareCtx(390,H);
+  ctx.fillStyle='#0e1a12';ctx.fillRect(0,0,W,H);
+  let y=_shareHeader(ctx,W,river,st?.gauge||'');
+
+  // Level + badge
+  const ls=lvStat(rv.level,st?.nMax||3,rv.trend);
+  const lvCol=ls.cls==='bn'?'#c04040':ls.cls==='bg'?'#4a9e6a':'#c8922a';
+  ctx.fillStyle='#e8f0e9';ctx.font='bold 28px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(fmtLevel(rv.level),16,y+34);
+  ctx.fillStyle=lvCol+'33';ctx.beginPath();ctx.roundRect(W-130,y+10,118,26,6);ctx.fill();
+  ctx.fillStyle=lvCol;ctx.font='bold 11px -apple-system,sans-serif';ctx.textAlign='center';ctx.fillText(ls.text,W-71,y+28);
+  ctx.fillStyle='#8fa892';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';ctx.fillText(`Trend: ${rv.trend} · nMax: ${fmtNMax(st?.nMax||3)}`,16,y+54);
+  y+=68;
+
+  // Draw the 48h graph inline
+  const graphH=140;
+  const conv=useMetric?v=>v:v=>v*3.281;
+  const hist=rv.history.map(conv);
+  const nMax=conv(st?.nMax||3);
+  const pad={t:14,r:10,b:26,l:46};
+  const gW=W-24,cw=gW-pad.l-pad.r,ch=graphH-pad.t-pad.b;
+  const mn=Math.max(0,Math.min(...hist)*0.92),mx=Math.max(...hist)*1.08,rng=(mx-mn)||0.1;
+  const toX=i=>12+pad.l+(i/(hist.length-1))*cw;
+  const toY=v=>y+pad.t+ch-(((v-mn)/rng)*ch);
+
+  ctx.fillStyle='#1a2e1f';ctx.beginPath();ctx.roundRect(12,y,gW,graphH,7);ctx.fill();
+
+  // Y axis labels
+  for(let i=0;i<=4;i++){const v=mn+(rng/4)*i,gy=toY(v);
+    ctx.strokeStyle='rgba(255,255,255,.05)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(12+pad.l,gy);ctx.lineTo(12+pad.l+cw,gy);ctx.stroke();
+    ctx.fillStyle='rgba(90,112,96,.85)';ctx.font='9px DM Sans,sans-serif';ctx.textAlign='right';ctx.fillText(v.toFixed(useMetric?2:1)+(useMetric?'m':'ft'),12+pad.l-3,gy+3);}
+
+  // nMax line
+  if(nMax>=mn&&nMax<=mx){const ny=toY(nMax);ctx.setLineDash([3,3]);ctx.strokeStyle='rgba(200,146,42,.5)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(12+pad.l,ny);ctx.lineTo(12+pad.l+cw,ny);ctx.stroke();ctx.setLineDash([]);}
+
+  // Area fill
+  ctx.beginPath();ctx.moveTo(toX(0),toY(hist[0]));hist.forEach((v,i)=>{if(i>0)ctx.lineTo(toX(i),toY(v));});
+  ctx.lineTo(toX(hist.length-1),y+pad.t+ch);ctx.lineTo(toX(0),y+pad.t+ch);ctx.closePath();ctx.fillStyle='rgba(74,158,106,.13)';ctx.fill();
+
+  // Line
+  ctx.beginPath();ctx.moveTo(toX(0),toY(hist[0]));hist.forEach((v,i)=>{if(i>0)ctx.lineTo(toX(i),toY(v));});
+  ctx.strokeStyle='#4a9e6a';ctx.lineWidth=2;ctx.lineJoin='round';ctx.stroke();
+
+  // Latest dot
+  const lx=toX(hist.length-1),ly=toY(hist[hist.length-1]);
+  ctx.beginPath();ctx.arc(lx,ly,5,0,Math.PI*2);ctx.fillStyle='#7dc49a';ctx.fill();
+
+  y+=graphH+12;
+
+  // Wade note
+  ctx.fillStyle='#5a7060';ctx.font='10px -apple-system,sans-serif';ctx.textAlign='left';
+  ctx.fillText(ls.wade.slice(0,60),16,y);y+=20;
+
+  _shareFooter(ctx,W,H);
+  return _toBlob(canvas);
 }
 function sv(){localStorage.setItem('g_catches',JSON.stringify(catches));localStorage.setItem('g_favrivers',JSON.stringify(favRivers));localStorage.setItem('g_favlocs',JSON.stringify(favLocs));}
 function wxI(c){return WXI[c]||'🌡️';}
@@ -2452,6 +2594,13 @@ function getRiverRegion(name){
   return'Other';
 }
 const REGION_ORDER=['Highlands','Tay & Perthshire','Dee & Grampian','Tweed & Borders','South & South-West','Central & Clyde','Lochs','Other'];
+// Track which regions are open — start with all collapsed
+let _openRegions=new Set(JSON.parse(localStorage.getItem('g_openregions')||'[]'));
+function toggleRegion(reg){
+  if(_openRegions.has(reg))_openRegions.delete(reg);else _openRegions.add(reg);
+  localStorage.setItem('g_openregions',JSON.stringify([..._openRegions]));
+  renderRivers(document.getElementById('river-search')?.value||'');
+}
 function renderRivers(query=''){
   const q=query.toLowerCase();
   const list=RIVERS.filter(r=>!q||r.name.toLowerCase().includes(q)||r.catchment.toLowerCase().includes(q)||r.species.toLowerCase().includes(q));
@@ -2463,17 +2612,27 @@ function renderRivers(query=''){
     }).join('');
     return;
   }
-  // Group by region
+  // Group by region — each group is collapsible
   const grouped={};
   list.forEach(r=>{const reg=getRiverRegion(r.name);if(!grouped[reg])grouped[reg]=[];grouped[reg].push(r);});
   let html='';
   REGION_ORDER.forEach(reg=>{
     if(!grouped[reg]||!grouped[reg].length)return;
-    html+=`<div style="font-size:10px;font-weight:600;color:var(--text3);letter-spacing:.08em;padding:10px 0 5px;border-bottom:1px solid var(--border)">${reg.toUpperCase()}</div>`;
-    html+=grouped[reg].map(r=>{
-      const idx=RIVERS.indexOf(r),isFav=favRivers.includes(r.name);
-      return`<div class="ri"><div style="flex:1;cursor:pointer" onclick="viewRiver(${idx})"><div style="font-size:13px;font-weight:500;color:var(--text)">${r.icon} ${r.name}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${r.species}${r.noData?' · no SEPA data':''}</div></div><span class="favstar" onclick="toggleFavRiver('${r.name.replace(/'/g,"\\'")}',this)">${isFav?'★':'☆'}</span></div>`;
-    }).join('');
+    const open=_openRegions.has(reg);
+    const count=grouped[reg].length;
+    html+=`<div style="border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:6px">
+<div onclick="toggleRegion('${reg.replace(/'/g,"\\'")}')" style="cursor:pointer;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;background:var(--bg3)">
+  <div>
+    <span style="font-size:12px;font-weight:600;color:var(--text)">${reg}</span>
+    <span style="font-size:10px;color:var(--text3);margin-left:8px">${count} river${count!==1?'s':''}</span>
+  </div>
+  <span style="font-size:11px;color:var(--text3)">${open?'▲':'▼'}</span>
+</div>
+${open?`<div style="display:flex;flex-direction:column;gap:0">${grouped[reg].map(r=>{
+  const idx=RIVERS.indexOf(r),isFav=favRivers.includes(r.name);
+  return`<div class="ri" style="border-radius:0;border-left:none;border-right:none;border-bottom:none"><div style="flex:1;cursor:pointer" onclick="viewRiver(${idx})"><div style="font-size:13px;font-weight:500;color:var(--text)">${r.icon} ${r.name}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">${r.species}${r.noData?' · no SEPA data':''}</div></div><span class="favstar" onclick="toggleFavRiver('${r.name.replace(/'/g,"\\'")}',this)">${isFav?'★':'☆'}</span></div>`;
+}).join('')}</div>`:''}
+</div>`;
   });
   document.getElementById('rivers-list').innerHTML=html;
 }
