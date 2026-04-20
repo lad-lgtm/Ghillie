@@ -2,33 +2,33 @@
   "name": "Ghillie — Scotland Fishing",
   "short_name": "Ghillie",
   "description": "Live river levels, weather and go/no-go fishing conditions for Scottish rivers.",
-  "start_url": "/index.html",
-  "scope": "/",
+  "start_url": "/Ghillie/index.html",
+  "scope": "/Ghillie/",
   "display": "standalone",
   "background_color": "#1a2e1f",
   "theme_color": "#1a2e1f",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/Ghillie/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-192.png",
+      "src": "/Ghillie/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "/Ghillie/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "icon-512.png",
+      "src": "/Ghillie/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"

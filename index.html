@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<base href="/Ghillie/">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -9,11 +10,11 @@
 <meta name="theme-color" content="#1a2e1f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="description" content="Live river levels, weather and go/no-go fishing conditions for Scottish rivers.">
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
-<link rel="apple-touch-icon" sizes="512x512" href="icon-512.png">
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="/Ghillie/manifest.json">
+<link rel="apple-touch-icon" href="/Ghillie/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="192x192" href="/Ghillie/icon-192.png">
+<link rel="apple-touch-icon" sizes="512x512" href="/Ghillie/icon-512.png">
+<link rel="manifest" href="/Ghillie/manifest.json">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src *; img-src * data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;">
 <title>Ghillie — Scotland Fishing</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -3243,7 +3244,7 @@ if('serviceWorker' in navigator){
   navigator.serviceWorker.getRegistrations().then(regs=>{
     regs.forEach(r=>r.unregister());
   }).then(()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    navigator.serviceWorker.register('/Ghillie/sw.js').catch(()=>{});
   });
 }
 </script>
